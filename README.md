@@ -122,8 +122,7 @@ This repository defines schemas and specifications, not executable code. Impleme
 The schemas are defined in YAML for language-agnostic consumption. Implementations may use any language or platform that can faithfully represent the semantics.
 
 ## Testing
-
-Tests are first-class components of this system. The test suite serves as both verification and specification.
+ The test suite serves as both verification and specification.
 
 - **Golden tests**: Fixed inputs with expected outputs (behavioral contracts)
 - **Negative tests**: Cases where resolution must not occur
