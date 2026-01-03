@@ -1,8 +1,8 @@
 # Entity Resolution Spec
 
-A deterministic, minimal schema for resolving identity across people, organizations, and addresses.
+a deterministic, minimal schema for resolving identity across people, organizations, and addresses.
 
-Designed for evidence-grade analytical work in legal, compliance, audit, and investigative contexts.
+designed for evidence-grade analytical work in legal, compliance, audit, and investigative contexts.
 
 ## Overview
 
@@ -13,7 +13,6 @@ This repository defines a structured approach to entity resolution that prioriti
 - **Reproducibility**: Results can be verified and audited
 - **Conservative defaults**: Ambiguity is preserved rather than collapsed
 
-This is not a product, not a detection system, and not a scoring engine. It is infrastructure for resolving identity.
 
 ## What This Schema Does
 
@@ -23,14 +22,6 @@ This is not a product, not a detection system, and not a scoring engine. It is i
 - Preserves ambiguity when evidence is insufficient
 - Maintains complete lineage from resolved entities back to source records
 - Supports human review workflows for contested or ambiguous resolutions
-
-## What This Schema Does Not Do
-
-- Score, rank, or infer risk, intent, or behavior
-- Perform probabilistic matching or fuzzy inference
-- Automatically escalate confidence based on accumulated weak signals
-- Make decisions—it produces evidence for humans or systems to act upon
-- Use machine learning, models, or automated inference
 
 ## Repository Structure
 
@@ -155,7 +146,4 @@ Contributions should:
 
 [To be determined]
 
-## Contact
-
-[To be determined]
-
+contact founders@audt.ai for inquiries. 
