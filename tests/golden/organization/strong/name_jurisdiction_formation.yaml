@@ -1,0 +1,89 @@
+# Golden Test: Name + Jurisdiction + Formation Date Strong Match
+# Multiple corroborating attributes produce strong confidence
+
+test_id: ORG-STRONG-002-001
+description: Matching legal name, jurisdiction, and formation date produces strong match
+rule_tested: ORG-STRONG-002
+category: golden
+entity_type: organization
+
+input:
+  record_a:
+    source_record_id: "a7b8c9d0-0001-4000-8000-000000000001"
+    names:
+      legal_name: "Riverside Development Corp"
+    jurisdiction:
+      country: "US"
+      state_province: "FL"
+    formation_date: "2015-06-12"
+
+  record_b:
+    source_record_id: "a7b8c9d0-0001-4000-8000-000000000002"
+    names:
+      legal_name: "Riverside Development Corp"
+    jurisdiction:
+      country: "US"
+      state_province: "FL"
+    formation_date: "2015-06-12"
+
+expected:
+  resolution: resolved
+  tier: strong
+  rule_fired: ORG-STRONG-002
+  entity_count: 1
+  conflicts_detected: []
+
+notes: |
+  Legal name + jurisdiction + formation date provides strong confidence.
+  Formation date matching eliminates confusion with similarly-named entities.
+  No EIN or registration number present; cannot reach exact tier.
+
+assertions:
+  - type: tier_equals
+    expected: strong
+  - type: entities_merged
+    expected: true
+---
+test_id: ORG-STRONG-002-002
+description: Same name and jurisdiction with different formation dates does not produce strong match
+rule_tested: ORG-STRONG-002
+category: golden
+entity_type: organization
+
+input:
+  record_a:
+    source_record_id: "a7b8c9d0-0001-4000-8000-000000000003"
+    names:
+      legal_name: "Metro Services Inc"
+    jurisdiction:
+      country: "US"
+      state_province: "IL"
+    formation_date: "2008-03-15"
+
+  record_b:
+    source_record_id: "a7b8c9d0-0001-4000-8000-000000000004"
+    names:
+      legal_name: "Metro Services Inc"
+    jurisdiction:
+      country: "US"
+      state_province: "IL"
+    formation_date: "2019-09-22"
+
+expected:
+  resolution: candidate
+  tier: weak
+  rule_fired: ORG-WEAK-001
+  entity_count: 2
+  candidate_cluster: true
+
+notes: |
+  Same name and jurisdiction, but different formation dates.
+  Different formation dates indicate distinct legal entities.
+  Falls back to weak-tier rule (ORG-WEAK-001) which flags conflict.
+
+assertions:
+  - type: tier_equals
+    expected: weak
+  - type: entities_merged
+    expected: false
+

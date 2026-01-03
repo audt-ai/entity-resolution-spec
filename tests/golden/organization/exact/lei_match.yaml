@@ -1,0 +1,93 @@
+# Golden Test: LEI Exact Match
+# Organizations with matching Legal Entity Identifier resolve as same entity
+
+test_id: ORG-EXACT-002-001
+description: Matching LEI produces exact match
+rule_tested: ORG-EXACT-002
+category: golden
+entity_type: organization
+
+input:
+  record_a:
+    source_record_id: "b2c3d4e5-0001-4000-8000-000000000001"
+    identifiers:
+      lei: "5493001KJTIIGC8Y1R12"
+    names:
+      legal_name: "Global Industries Ltd"
+    jurisdiction:
+      country: "GB"
+
+  record_b:
+    source_record_id: "b2c3d4e5-0001-4000-8000-000000000002"
+    identifiers:
+      lei: "5493001KJTIIGC8Y1R12"
+    names:
+      legal_name: "GLOBAL INDUSTRIES LIMITED"
+    jurisdiction:
+      country: "GB"
+
+expected:
+  resolution: resolved
+  tier: exact
+  rule_fired: ORG-EXACT-002
+  entity_count: 1
+  conflicts_detected: []
+
+notes: |
+  LEI (Legal Entity Identifier) is globally unique.
+  Name variations (Ltd vs LIMITED, case differences) do not prevent match.
+  LEI is authoritative for organization identity.
+
+assertions:
+  - type: tier_equals
+    expected: exact
+  - type: entities_merged
+    expected: true
+  - type: rule_fired
+    expected: ORG-EXACT-002
+---
+test_id: ORG-EXACT-002-002
+description: Different LEIs must not match regardless of name similarity
+rule_tested: ORG-EXACT-002
+category: golden
+entity_type: organization
+
+input:
+  record_a:
+    source_record_id: "b2c3d4e5-0001-4000-8000-000000000003"
+    identifiers:
+      lei: "5493001KJTIIGC8Y1R12"
+    names:
+      legal_name: "Acme Holdings Inc"
+    jurisdiction:
+      country: "US"
+      state_province: "DE"
+
+  record_b:
+    source_record_id: "b2c3d4e5-0001-4000-8000-000000000004"
+    identifiers:
+      lei: "549300MLUDYVRQOOXS22"
+    names:
+      legal_name: "Acme Holdings Inc"
+    jurisdiction:
+      country: "US"
+      state_province: "DE"
+
+expected:
+  resolution: unresolved
+  tier: null
+  rule_fired: null
+  entity_count: 2
+  conflicts_detected: []
+
+notes: |
+  Different LEIs indicate different legal entities.
+  Same name and jurisdiction do not override LEI mismatch.
+  LEIs are issued to distinct legal entities by GLEIF.
+
+assertions:
+  - type: tier_equals
+    expected: null
+  - type: entities_merged
+    expected: false
+

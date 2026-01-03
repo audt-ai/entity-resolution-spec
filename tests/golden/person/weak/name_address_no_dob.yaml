@@ -1,0 +1,97 @@
+# Golden Test: Name + Address Weak Match (No DOB)
+# Partial attribute match produces weak tier
+
+test_id: PERSON-WEAK-001-001
+description: Name and address match without DOB produces weak match
+rule_tested: PERSON-WEAK-001
+category: golden
+entity_type: person
+
+input:
+  record_a:
+    source_record_id: "a3b4c5d6-e7f8-9012-6789-123456789012"
+    name:
+      given_name: "David"
+      family_name: "Wilson"
+    addresses:
+      - address_entity_id: "addr-300"
+        address_type: "residential"
+    # Note: No date_of_birth
+
+  record_b:
+    source_record_id: "b4c5d6e7-f8a9-0123-7890-234567890123"
+    name:
+      given_name: "David"
+      family_name: "Wilson"
+    addresses:
+      - address_entity_id: "addr-300"
+        address_type: "residential"
+    # Note: No date_of_birth
+
+expected:
+  resolution: candidate
+  tier: weak
+  rule_fired: PERSON-WEAK-001
+  entity_count: 2
+  candidate_cluster: true
+  conflicts_detected: []
+
+notes: |
+  Without DOB, name + address is insufficient for confident resolution.
+  Records are grouped as candidates for human review.
+  Weak matches do not merge automatically.
+
+assertions:
+  - type: tier_equals
+    expected: weak
+  - type: entities_merged
+    expected: false
+  - type: candidate_cluster_created
+    expected: true
+---
+test_id: PERSON-WEAK-001-002
+description: Common name at same address flags for review
+rule_tested: PERSON-WEAK-001
+category: golden
+entity_type: person
+
+input:
+  record_a:
+    source_record_id: "c5d6e7f8-a9b0-1234-8901-345678901234"
+    name:
+      given_name: "John"
+      family_name: "Smith"
+    addresses:
+      - address_entity_id: "addr-400"
+        address_type: "residential"
+
+  record_b:
+    source_record_id: "d6e7f8a9-b0c1-2345-9012-456789012345"
+    name:
+      given_name: "John"
+      family_name: "Smith"
+    addresses:
+      - address_entity_id: "addr-400"
+        address_type: "residential"
+    date_of_birth: "1975-03-15"
+
+expected:
+  resolution: candidate
+  tier: weak
+  rule_fired: PERSON-WEAK-001
+  entity_count: 2
+  candidate_cluster: true
+  conflicts_detected: []
+
+notes: |
+  "John Smith" is a common name.
+  Without DOB on record_a, cannot confirm same person.
+  Could be father/son, roommates, or data entry error.
+  Human review required.
+
+assertions:
+  - type: tier_equals
+    expected: weak
+  - type: requires_human_review
+    expected: true
+

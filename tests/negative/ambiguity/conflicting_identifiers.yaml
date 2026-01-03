@@ -1,0 +1,175 @@
+# Ambiguity Test: Conflicting Identifiers
+# Conflicting high-specificity identifiers must produce ambiguity
+
+test_id: AMB-001
+description: Matching SSN with conflicting DOB produces ambiguity
+rule_tested: PERSON-EXACT-001
+category: ambiguity
+entity_type: person
+
+input:
+  record_a:
+    source_record_id: "a5b6c7d8-e9f0-1234-8901-345678901234"
+    identifiers:
+      ssn: "111-22-3333"
+    name:
+      given_name: "Robert"
+      family_name: "Taylor"
+    date_of_birth: "1970-08-20"
+
+  record_b:
+    source_record_id: "b6c7d8e9-f0a1-2345-9012-456789012345"
+    identifiers:
+      ssn: "111-22-3333"
+    name:
+      given_name: "Robert"
+      family_name: "Taylor"
+    date_of_birth: "1975-11-03"
+
+expected:
+  resolution: ambiguous
+  tier: null
+  rule_fired: PERSON-EXACT-001
+  conflict_detected: true
+  conflict_type: identifier_attribute_conflict
+  requires_review: true
+
+rationale: |
+  SSN matches, which would normally produce exact match.
+  However, DOB conflict (5 years difference) triggers conflict indicator.
+  Possible explanations:
+  - Data entry error on one record
+  - SSN reuse (rare but documented)
+  - Identity fraud
+  Human review required to resolve.
+
+assertions:
+  - type: resolution_type
+    expected: ambiguous
+  - type: conflict_detected
+    expected: true
+  - type: requires_human_review
+    expected: true
+  - type: entities_merged
+    expected: false
+---
+test_id: AMB-002
+description: Different SSNs on otherwise matching records produces ambiguity
+rule_tested: PERSON-STRONG-001
+category: ambiguity
+entity_type: person
+
+input:
+  record_a:
+    source_record_id: "c7d8e9f0-a1b2-3456-0123-567890123456"
+    identifiers:
+      ssn: "444-55-6666"
+    name:
+      given_name: "Jennifer"
+      family_name: "Lee"
+    date_of_birth: "1982-04-10"
+    addresses:
+      - address_entity_id: "addr-500"
+        address_type: "residential"
+
+  record_b:
+    source_record_id: "d8e9f0a1-b2c3-4567-1234-678901234567"
+    identifiers:
+      ssn: "444-55-7777"
+    name:
+      given_name: "Jennifer"
+      family_name: "Lee"
+    date_of_birth: "1982-04-10"
+    addresses:
+      - address_entity_id: "addr-500"
+        address_type: "residential"
+
+expected:
+  resolution: ambiguous
+  tier: null
+  rule_fired: null
+  conflict_detected: true
+  conflict_type: identifier_mismatch
+  requires_review: true
+
+rationale: |
+  Name + DOB + Address all match (would be strong match).
+  But different SSNs indicate different people.
+  Global conflict indicator CONFLICT-GLOBAL-001 fires.
+  Possible explanations:
+  - Twins living together
+  - Data entry error (transposed digits: 6666 vs 7777)
+  - One SSN is incorrect
+  Cannot resolve without human review.
+
+assertions:
+  - type: resolution_type
+    expected: ambiguous
+  - type: conflict_detected
+    expected: true
+  - type: conflict_indicator
+    expected: CONFLICT-GLOBAL-001
+---
+test_id: AMB-003
+description: Record matches multiple existing entities with equal confidence
+rule_tested: PERSON-STRONG-001
+category: ambiguity
+entity_type: person
+
+input:
+  existing_entity_a:
+    entity_id: "ent-001"
+    name:
+      given_name: "Thomas"
+      family_name: "Anderson"
+    date_of_birth: "1988-09-15"
+    addresses:
+      - address_entity_id: "addr-600"
+
+  existing_entity_b:
+    entity_id: "ent-002"
+    name:
+      given_name: "Thomas"
+      family_name: "Anderson"
+    date_of_birth: "1988-09-15"
+    addresses:
+      - address_entity_id: "addr-700"
+
+  new_record:
+    source_record_id: "e9f0a1b2-c3d4-5678-2345-789012345678"
+    name:
+      given_name: "Thomas"
+      family_name: "Anderson"
+    date_of_birth: "1988-09-15"
+    addresses:
+      - address_entity_id: "addr-600"
+      - address_entity_id: "addr-700"
+
+expected:
+  resolution: ambiguous
+  tier: null
+  conflict_detected: true
+  conflict_type: multiple_candidate_conflict
+  candidate_entities:
+    - "ent-001"
+    - "ent-002"
+  requires_review: true
+
+rationale: |
+  New record has addresses matching both existing entities.
+  Strong match rule fires for both entity pairs.
+  Cannot determine which is correct without additional evidence.
+  Possible scenarios:
+  - Same person with multiple addresses (merge all three)
+  - Different people (match to one, leave other separate)
+  - Data quality issue
+  Human review required.
+
+assertions:
+  - type: resolution_type
+    expected: ambiguous
+  - type: multiple_candidates
+    expected: true
+  - type: candidate_count
+    expected: 2
+

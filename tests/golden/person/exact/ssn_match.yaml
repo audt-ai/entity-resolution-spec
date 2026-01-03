@@ -1,0 +1,97 @@
+# Golden Test: SSN Exact Match
+# Two records with matching SSN resolve as same entity at exact tier
+
+test_id: PERSON-EXACT-001-001
+description: Two records with matching SSN resolve as exact match
+rule_tested: PERSON-EXACT-001
+category: golden
+entity_type: person
+
+input:
+  record_a:
+    source_record_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    identifiers:
+      ssn: "123-45-6789"
+    name:
+      given_name: "John"
+      family_name: "Smith"
+    date_of_birth: "1980-01-15"
+    addresses:
+      - address_entity_id: "addr-001"
+        address_type: "residential"
+
+  record_b:
+    source_record_id: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+    identifiers:
+      ssn: "123-45-6789"
+    name:
+      given_name: "Jonathan"
+      family_name: "Smith"
+    date_of_birth: "1980-01-15"
+    addresses:
+      - address_entity_id: "addr-002"
+        address_type: "residential"
+
+expected:
+  resolution: resolved
+  tier: exact
+  rule_fired: PERSON-EXACT-001
+  entity_count: 1
+  conflicts_detected: []
+
+notes: |
+  Name variation (John vs Jonathan) does not prevent exact match when SSN matches.
+  SSN is authoritative for identity resolution.
+  Different addresses do not create conflict at exact tier.
+
+assertions:
+  - type: tier_equals
+    expected: exact
+  - type: entities_merged
+    expected: true
+  - type: rule_fired
+    expected: PERSON-EXACT-001
+---
+test_id: PERSON-EXACT-001-002
+description: SSN match with normalized format variations
+rule_tested: PERSON-EXACT-001
+category: golden
+entity_type: person
+
+input:
+  record_a:
+    source_record_id: "c3d4e5f6-a7b8-9012-cdef-123456789012"
+    identifiers:
+      ssn: "987654321"  # No hyphens
+    name:
+      given_name: "Jane"
+      family_name: "Doe"
+    date_of_birth: "1975-06-30"
+
+  record_b:
+    source_record_id: "d4e5f6a7-b8c9-0123-def0-234567890123"
+    identifiers:
+      ssn: "987-65-4321"  # With hyphens
+    name:
+      given_name: "Jane"
+      family_name: "Doe"
+    date_of_birth: "1975-06-30"
+
+expected:
+  resolution: resolved
+  tier: exact
+  rule_fired: PERSON-EXACT-001
+  entity_count: 1
+  conflicts_detected: []
+
+notes: |
+  SSN normalization converts both formats to XXX-XX-XXXX before comparison.
+  This test verifies that format variations do not prevent matching.
+
+assertions:
+  - type: tier_equals
+    expected: exact
+  - type: normalization_applied
+    field: identifiers.ssn
+    expected: true
+

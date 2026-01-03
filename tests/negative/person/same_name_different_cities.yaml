@@ -1,0 +1,99 @@
+# Negative Test: Same Name in Different Cities
+# Records must NOT resolve despite identical names
+
+test_id: PERSON-NEG-001
+description: Same name in different cities must not resolve
+rule_tested: PERSON-WEAK-001
+category: negative
+entity_type: person
+
+input:
+  record_a:
+    source_record_id: "c1d2e3f4-a5b6-7890-4567-901234567890"
+    name:
+      given_name: "John"
+      family_name: "Smith"
+    addresses:
+      - address_entity_id: "addr-nyc-001"
+        address_type: "residential"
+    # Address resolves to: New York, NY
+
+  record_b:
+    source_record_id: "d2e3f4a5-b6c7-8901-5678-012345678901"
+    name:
+      given_name: "John"
+      family_name: "Smith"
+    addresses:
+      - address_entity_id: "addr-la-001"
+        address_type: "residential"
+    # Address resolves to: Los Angeles, CA
+
+expected:
+  resolution: unresolved
+  tier: null
+  rule_fired: null
+  entity_count: 2
+  must_not_merge: true
+
+rationale: |
+  "John Smith" is the most common name in the US.
+  Without shared address, DOB, or identifier, there is no basis for resolution.
+  Different cities strongly suggest different individuals.
+
+assertions:
+  - type: entities_merged
+    expected: false
+  - type: no_match_produced
+    expected: true
+---
+test_id: PERSON-NEG-002
+description: Same name and DOB in different states must not auto-resolve
+rule_tested: PERSON-WEAK-002
+category: negative
+entity_type: person
+
+input:
+  record_a:
+    source_record_id: "e3f4a5b6-c7d8-9012-6789-123456789012"
+    name:
+      given_name: "Mary"
+      family_name: "Johnson"
+    date_of_birth: "1985-06-15"
+    addresses:
+      - address_entity_id: "addr-tx-001"
+        address_type: "residential"
+    # Address resolves to: Austin, TX
+
+  record_b:
+    source_record_id: "f4a5b6c7-d8e9-0123-7890-234567890123"
+    name:
+      given_name: "Mary"
+      family_name: "Johnson"
+    date_of_birth: "1985-06-15"
+    addresses:
+      - address_entity_id: "addr-fl-001"
+        address_type: "residential"
+    # Address resolves to: Miami, FL
+
+expected:
+  resolution: candidate
+  tier: weak
+  rule_fired: PERSON-WEAK-002
+  entity_count: 2
+  must_not_merge: true
+  candidate_cluster: true
+
+rationale: |
+  Name + DOB match triggers weak match rule.
+  However, different addresses in different states suggest different people.
+  Weak match does NOT auto-resolve; creates candidate for review.
+  This tests that weak matches don't become strong through address conflict.
+
+assertions:
+  - type: entities_merged
+    expected: false
+  - type: tier_equals
+    expected: weak
+  - type: requires_human_review
+    expected: true
+

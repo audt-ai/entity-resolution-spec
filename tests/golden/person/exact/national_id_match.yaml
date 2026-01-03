@@ -1,0 +1,94 @@
+# Golden Test: National ID Exact Match
+# Two records with matching national ID and country resolve as same entity
+
+test_id: PERSON-EXACT-003-001
+description: Matching national ID and issuing country produces exact match
+rule_tested: PERSON-EXACT-003
+category: golden
+entity_type: person
+
+input:
+  record_a:
+    source_record_id: "a1b2c3d4-0001-4000-8000-000000000001"
+    identifiers:
+      national_id: "AB123456789"
+      national_id_country: "GB"
+    name:
+      given_name: "James"
+      family_name: "Wilson"
+    date_of_birth: "1978-03-12"
+
+  record_b:
+    source_record_id: "a1b2c3d4-0001-4000-8000-000000000002"
+    identifiers:
+      national_id: "AB123456789"
+      national_id_country: "GB"
+    name:
+      given_name: "James"
+      middle_names: ["Robert"]
+      family_name: "Wilson"
+    date_of_birth: "1978-03-12"
+
+expected:
+  resolution: resolved
+  tier: exact
+  rule_fired: PERSON-EXACT-003
+  entity_count: 1
+  conflicts_detected: []
+
+notes: |
+  National ID + issuing country is sufficient for exact match.
+  Middle name presence on one record does not affect resolution.
+  National IDs are unique within their issuing country.
+
+assertions:
+  - type: tier_equals
+    expected: exact
+  - type: entities_merged
+    expected: true
+  - type: rule_fired
+    expected: PERSON-EXACT-003
+---
+test_id: PERSON-EXACT-003-002
+description: Same national ID from different countries does not match
+rule_tested: PERSON-EXACT-003
+category: golden
+entity_type: person
+
+input:
+  record_a:
+    source_record_id: "a1b2c3d4-0001-4000-8000-000000000003"
+    identifiers:
+      national_id: "123456789"
+      national_id_country: "DE"
+    name:
+      given_name: "Hans"
+      family_name: "Mueller"
+
+  record_b:
+    source_record_id: "a1b2c3d4-0001-4000-8000-000000000004"
+    identifiers:
+      national_id: "123456789"
+      national_id_country: "AT"
+    name:
+      given_name: "Hans"
+      family_name: "Mueller"
+
+expected:
+  resolution: unresolved
+  tier: null
+  rule_fired: null
+  entity_count: 2
+  conflicts_detected: []
+
+notes: |
+  National ID numbers are only unique within their issuing country.
+  Same number from Germany (DE) and Austria (AT) are different IDs.
+  Rule requires both national_id AND national_id_country to match.
+
+assertions:
+  - type: tier_equals
+    expected: null
+  - type: entities_merged
+    expected: false
+

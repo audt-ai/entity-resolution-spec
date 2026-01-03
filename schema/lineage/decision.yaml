@@ -1,0 +1,486 @@
+# Decision Schema
+# Documents all resolution decisions for auditability and review
+
+schema_version: "1.0.0"
+description: |
+  Decision records document every resolution decision made by the system
+  or by human reviewers. Decisions are immutable and append-only;
+  corrections are made by adding new decisions, not modifying old ones.
+
+# Resolution decision schema
+resolution_decision:
+  fields:
+    decision_id:
+      type: string
+      format: uuid
+      required: true
+      description: Unique identifier for this decision
+      immutable: true
+
+    # Decision type
+    decision_type:
+      type: string
+      required: true
+      enum:
+        - initial_resolution  # First resolution of record pair
+        - merge  # Previously separate entities determined to be same
+        - split  # Previously merged entities determined to be different
+        - tier_change  # Confidence tier updated
+        - conflict_resolution  # Ambiguous case resolved
+        - override  # Human override of system decision
+        - correction  # Correction of previous decision
+      description: Type of decision being recorded
+
+    # Entities involved
+    entities:
+      type: object
+      required: true
+      description: Entities involved in this decision
+      fields:
+        primary_entity_id:
+          type: string
+          format: uuid
+          description: Primary entity in the decision
+
+        secondary_entity_id:
+          type: string
+          format: uuid
+          description: Secondary entity (for pair decisions)
+
+        affected_entity_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: All entity IDs affected by this decision
+
+        resulting_entity_id:
+          type: string
+          format: uuid
+          description: |
+            Entity ID after decision (for merges, this is the surviving entity)
+
+    # Source records involved
+    source_records:
+      type: object
+      description: Source records that contributed to this decision
+      fields:
+        record_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+        contributing_records:
+          type: array
+          items:
+            type: object
+            fields:
+              source_record_id:
+                type: string
+                format: uuid
+              contribution:
+                type: string
+                description: How this record contributed to the decision
+
+    # Decision details
+    decision:
+      type: object
+      required: true
+      description: The decision itself
+      fields:
+        outcome:
+          type: string
+          required: true
+          enum:
+            - same_entity  # Entities are the same
+            - different_entities  # Entities are different
+            - ambiguous  # Cannot determine; requires review
+            - deferred  # Decision deferred for later
+          description: The resolution outcome
+
+        confidence_tier:
+          type: string
+          enum:
+            - exact
+            - strong
+            - weak
+            - unresolved
+            - ambiguous
+          description: Assigned confidence tier (if applicable)
+
+        previous_tier:
+          type: string
+          enum:
+            - exact
+            - strong
+            - weak
+            - unresolved
+            - ambiguous
+          description: Previous tier (for tier changes)
+
+    # Evidence basis
+    evidence:
+      type: object
+      required: true
+      description: Evidence that supports this decision
+      fields:
+        rules_evaluated:
+          type: array
+          items:
+            type: object
+            fields:
+              rule_id:
+                type: string
+              fired:
+                type: boolean
+              match_details:
+                type: object
+                description: Which fields matched and how
+              conflict_details:
+                type: object
+                description: Conflict indicators that triggered (if any)
+
+        rule_that_fired:
+          type: string
+          description: Primary rule that produced this decision
+
+        matching_fields:
+          type: array
+          items:
+            type: object
+            fields:
+              field_path:
+                type: string
+              value_a:
+                type: string
+              value_b:
+                type: string
+              match_type:
+                type: string
+                enum:
+                  - exact
+                  - normalized
+                  - reference
+          description: Fields that matched between entities
+
+        conflicting_fields:
+          type: array
+          items:
+            type: object
+            fields:
+              field_path:
+                type: string
+              value_a:
+                type: string
+              value_b:
+                type: string
+              conflict_type:
+                type: string
+          description: Fields that conflicted (if any)
+
+        additional_evidence:
+          type: array
+          items:
+            type: object
+            fields:
+              evidence_type:
+                type: string
+              description:
+                type: string
+              source:
+                type: string
+          description: Other evidence considered (e.g., human review notes)
+
+    # Decision maker
+    made_by:
+      type: object
+      required: true
+      description: Who or what made this decision
+      fields:
+        actor_type:
+          type: string
+          required: true
+          enum:
+            - system  # Automated system decision
+            - human  # Human reviewer decision
+          description: Type of decision maker
+
+        actor_id:
+          type: string
+          description: |
+            For system: processing batch ID
+            For human: user identifier
+
+        actor_name:
+          type: string
+          description: Human-readable name of decision maker
+
+    # For human decisions
+    human_review:
+      type: object
+      description: Additional information for human-reviewed decisions
+      fields:
+        review_queue_id:
+          type: string
+          description: Queue this decision came from
+
+        review_started_at:
+          type: datetime
+          format: iso8601
+
+        review_completed_at:
+          type: datetime
+          format: iso8601
+
+        justification:
+          type: string
+          required: true
+          min_length: 50
+          description: |
+            Human explanation of why this decision was made.
+            Required for all human decisions.
+
+        evidence_examined:
+          type: array
+          items:
+            type: string
+          description: List of evidence items reviewer examined
+
+        confidence_level:
+          type: string
+          enum:
+            - high
+            - medium
+            - low
+          description: Reviewer's confidence in their decision
+
+    # Supersession (for corrections/overrides)
+    supersession:
+      type: object
+      description: Information about what this decision supersedes
+      fields:
+        supersedes_decision_id:
+          type: string
+          format: uuid
+          description: Decision ID this decision supersedes
+
+        supersession_reason:
+          type: string
+          required: true
+          description: Why the previous decision was superseded
+
+    # Timestamps
+    timestamps:
+      type: object
+      required: true
+      fields:
+        decided_at:
+          type: datetime
+          format: iso8601
+          required: true
+          immutable: true
+          description: When this decision was made
+
+        effective_at:
+          type: datetime
+          format: iso8601
+          description: |
+            When this decision takes effect.
+            Usually same as decided_at; may differ for scheduled changes.
+
+        expires_at:
+          type: datetime
+          format: iso8601
+          description: When this decision expires (if temporary)
+
+# Decision history for an entity pair
+decision_history:
+  description: |
+    Complete history of decisions for a pair of entities.
+    Enables understanding how resolution evolved over time.
+
+  fields:
+    history_id:
+      type: string
+      format: uuid
+      required: true
+
+    entity_pair:
+      type: object
+      required: true
+      fields:
+        entity_a_id:
+          type: string
+          format: uuid
+        entity_b_id:
+          type: string
+          format: uuid
+
+    decisions:
+      type: array
+      items:
+        type: string
+        format: uuid
+      description: |
+        Ordered list of decision_ids for this entity pair.
+        Most recent decision is authoritative.
+
+    current_state:
+      type: object
+      description: Current resolution state
+      fields:
+        outcome:
+          type: string
+          enum:
+            - same_entity
+            - different_entities
+            - ambiguous
+        confidence_tier:
+          type: string
+        current_decision_id:
+          type: string
+          format: uuid
+
+    first_decision_at:
+      type: datetime
+      format: iso8601
+
+    last_decision_at:
+      type: datetime
+      format: iso8601
+
+    decision_count:
+      type: integer
+      description: Total number of decisions for this pair
+
+    has_human_review:
+      type: boolean
+      description: Whether any decision involved human review
+
+# Audit log schema
+audit_log:
+  description: |
+    Immutable log of all decision-related events for compliance.
+
+  fields:
+    log_id:
+      type: string
+      format: uuid
+      required: true
+      immutable: true
+
+    event_type:
+      type: string
+      required: true
+      enum:
+        - decision_created
+        - decision_superseded
+        - review_started
+        - review_completed
+        - decision_queried
+        - decision_exported
+
+    decision_id:
+      type: string
+      format: uuid
+      description: Related decision (if applicable)
+
+    actor_type:
+      type: string
+      enum:
+        - system
+        - human
+      required: true
+
+    actor_id:
+      type: string
+      required: true
+
+    timestamp:
+      type: datetime
+      format: iso8601
+      required: true
+      immutable: true
+
+    details:
+      type: object
+      description: Event-specific details
+
+    ip_address:
+      type: string
+      description: IP address for human actions
+
+    session_id:
+      type: string
+      description: Session identifier for human actions
+
+# Decision query capabilities
+query_capabilities:
+  description: |
+    The decision schema supports the following audit and operational queries.
+
+  queries:
+    - query: What is the current resolution status of these two entities?
+      method: |
+        1. Find decision_history for entity pair
+        2. Return current_state
+
+    - query: Why are these entities considered the same/different?
+      method: |
+        1. Find current decision for entity pair
+        2. Return evidence.rule_that_fired and evidence.matching_fields
+        3. If human decision, return human_review.justification
+
+    - query: What is the history of resolution decisions for these entities?
+      method: |
+        1. Find decision_history for entity pair
+        2. Retrieve all decisions in history
+        3. Return chronologically ordered decisions
+
+    - query: Who made this decision?
+      method: |
+        1. Retrieve decision by decision_id
+        2. Return made_by fields
+        3. If human, return human_review details
+
+    - query: What decisions has this user made?
+      method: |
+        1. Query decisions by made_by.actor_id
+        2. Return list of decisions
+
+    - query: What decisions were made in this time period?
+      method: |
+        1. Query decisions by timestamps.decided_at range
+        2. Return matching decisions
+
+    - query: What decisions are pending human review?
+      method: |
+        1. Query conflicts with status = open or under_review
+        2. Return list of pending items
+
+    - query: What decisions have been overridden?
+      method: |
+        1. Query decisions where decision_type = override
+        2. Include superseded decision details
+        3. Return list with supersession reasons
+
+# Retention policy
+retention:
+  description: |
+    Decision records are retained according to regulatory requirements.
+    They are never deleted, only archived.
+
+  policy:
+    active_retention: 7 years
+    archive_retention: indefinite
+    archive_method: |
+      After active retention period, decisions are moved to
+      cold storage but remain queryable.
+
+  compliance_notes:
+    - All decisions are immutable after creation
+    - Corrections are made via new superseding decisions
+    - Audit log entries cannot be modified or deleted
+    - Timestamps use server time in UTC
+

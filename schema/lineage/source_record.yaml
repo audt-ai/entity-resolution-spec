@@ -1,0 +1,402 @@
+# Source Record Schema
+# Tracks the origin of all data entering the entity resolution system
+
+schema_version: "1.0.0"
+description: |
+  A source record represents raw data as received from an upstream system
+  before any transformation or resolution. Source records are immutable;
+  they are the foundation of all lineage tracing.
+
+fields:
+  # Primary key
+  source_record_id:
+    type: string
+    format: uuid
+    required: true
+    description: System-assigned unique identifier for this source record
+    immutable: true
+
+  # Source system identification
+  source:
+    type: object
+    required: true
+    description: Information about the system that provided this record
+    fields:
+      source_system_id:
+        type: string
+        required: true
+        description: |
+          Identifier for the source system (e.g., "crm_prod", "vendor_x_feed").
+          Must be registered in the source system registry.
+
+      source_system_name:
+        type: string
+        description: Human-readable name of the source system
+
+      source_record_key:
+        type: string
+        required: true
+        description: |
+          The record's identifier in the source system.
+          Used for back-reference and reconciliation.
+
+      source_table:
+        type: string
+        description: Table or collection name in source system (if applicable)
+
+      source_schema_version:
+        type: string
+        description: Schema version of the source system at time of extraction
+
+  # Ingestion metadata
+  ingestion:
+    type: object
+    required: true
+    description: When and how this record was ingested
+    fields:
+      ingested_at:
+        type: datetime
+        format: iso8601
+        required: true
+        description: When this record was ingested into the resolution system
+
+      ingestion_batch_id:
+        type: string
+        format: uuid
+        description: Identifier for the ingestion batch (if batch processing)
+
+      ingestion_method:
+        type: string
+        enum:
+          - batch_file
+          - api_push
+          - api_pull
+          - streaming
+          - manual_entry
+          - migration
+        required: true
+
+      ingestion_file:
+        type: string
+        description: Filename or path if ingested from file
+
+      ingestion_row_number:
+        type: integer
+        description: Row number in source file (if applicable)
+
+  # Record timing
+  timing:
+    type: object
+    description: Temporal information about the record
+    fields:
+      record_created_at:
+        type: datetime
+        format: iso8601
+        description: When the record was created in the source system
+
+      record_updated_at:
+        type: datetime
+        format: iso8601
+        description: When the record was last updated in source system
+
+      record_effective_from:
+        type: date
+        description: Business effective date (if applicable)
+
+      record_effective_to:
+        type: date
+        description: Business effective end date (if applicable)
+
+      extracted_at:
+        type: datetime
+        format: iso8601
+        description: When the record was extracted from source system
+
+  # Record type
+  record_type:
+    type: string
+    enum:
+      - person
+      - organization
+      - address
+      - relationship
+      - mixed
+    required: true
+    description: Primary entity type this record represents
+
+  # Raw data (exactly as received)
+  raw_data:
+    type: object
+    required: true
+    description: |
+      The complete record as received, with no transformation.
+      Field names and values are preserved exactly as provided.
+      This is the authoritative representation of what was received.
+
+  # Data quality indicators from ingestion
+  ingestion_quality:
+    type: object
+    description: Data quality observations made during ingestion
+    fields:
+      validation_passed:
+        type: boolean
+        description: Whether the record passed ingestion validation
+
+      validation_errors:
+        type: array
+        items:
+          type: object
+          fields:
+            field:
+              type: string
+            error_type:
+              type: string
+              enum:
+                - missing_required
+                - invalid_format
+                - out_of_range
+                - invalid_reference
+                - duplicate_key
+            message:
+              type: string
+
+      warnings:
+        type: array
+        items:
+          type: object
+          fields:
+            field:
+              type: string
+            warning_type:
+              type: string
+            message:
+              type: string
+
+      completeness_score:
+        type: number
+        minimum: 0
+        maximum: 1
+        description: |
+          Fraction of expected fields that are populated.
+          This is informational, not used for matching decisions.
+
+  # Processing status
+  processing:
+    type: object
+    description: Status of this record in the resolution pipeline
+    fields:
+      status:
+        type: string
+        enum:
+          - pending  # Not yet processed
+          - processing  # Currently being processed
+          - processed  # Successfully processed
+          - failed  # Processing failed
+          - skipped  # Intentionally skipped (e.g., duplicate)
+        required: true
+
+      processed_at:
+        type: datetime
+        format: iso8601
+
+      error_message:
+        type: string
+        description: Error details if status is failed
+
+      resulting_entity_ids:
+        type: array
+        items:
+          type: string
+          format: uuid
+        description: Entity IDs created or updated from this record
+
+      skip_reason:
+        type: string
+        description: Reason if status is skipped
+
+  # Supersession (if this record replaces another)
+  supersession:
+    type: object
+    description: Information about record updates/corrections
+    fields:
+      supersedes_record_id:
+        type: string
+        format: uuid
+        description: Source record ID this record replaces (if correction)
+
+      superseded_by_record_id:
+        type: string
+        format: uuid
+        description: Source record ID that replaced this record
+
+      supersession_reason:
+        type: string
+        enum:
+          - correction
+          - update
+          - restatement
+          - retraction
+        description: Why this supersession occurred
+
+  # Metadata
+  metadata:
+    type: object
+    required: true
+    fields:
+      created_at:
+        type: datetime
+        format: iso8601
+        required: true
+        immutable: true
+
+      checksum:
+        type: string
+        description: |
+          Hash of raw_data for integrity verification.
+          Algorithm should be documented in implementation.
+
+# Source system registry schema
+source_system_registry:
+  description: |
+    Each source system must be registered before records can be ingested.
+    Registration documents the source's characteristics and data quality expectations.
+
+  fields:
+    source_system_id:
+      type: string
+      required: true
+      description: Unique identifier for the source system
+
+    source_system_name:
+      type: string
+      required: true
+      description: Human-readable name
+
+    description:
+      type: string
+      description: Description of what this source represents
+
+    owner:
+      type: string
+      description: Team or individual responsible for this source
+
+    data_classification:
+      type: string
+      enum:
+        - public
+        - internal
+        - confidential
+        - restricted
+      description: Data sensitivity classification
+
+    expected_record_types:
+      type: array
+      items:
+        type: string
+        enum:
+          - person
+          - organization
+          - address
+          - relationship
+      description: Entity types this source provides
+
+    expected_quality:
+      type: object
+      description: Expected data quality characteristics
+      fields:
+        identifier_reliability:
+          type: string
+          enum:
+            - high  # Identifiers are verified/authoritative
+            - medium  # Identifiers are generally reliable
+            - low  # Identifiers may have quality issues
+        update_frequency:
+          type: string
+          enum:
+            - real_time
+            - daily
+            - weekly
+            - monthly
+            - ad_hoc
+        known_issues:
+          type: array
+          items:
+            type: string
+          description: Documented data quality issues with this source
+
+    active:
+      type: boolean
+      description: Whether this source is currently active
+
+    registered_at:
+      type: datetime
+      format: iso8601
+
+    last_ingestion_at:
+      type: datetime
+      format: iso8601
+
+# Ingestion batch schema
+ingestion_batch_schema:
+  description: |
+    Groups related source records for batch processing and audit.
+
+  fields:
+    batch_id:
+      type: string
+      format: uuid
+      required: true
+
+    source_system_id:
+      type: string
+      required: true
+
+    started_at:
+      type: datetime
+      format: iso8601
+      required: true
+
+    completed_at:
+      type: datetime
+      format: iso8601
+
+    status:
+      type: string
+      enum:
+        - in_progress
+        - completed
+        - failed
+        - partial
+      required: true
+
+    record_count:
+      type: integer
+      description: Total records in batch
+
+    success_count:
+      type: integer
+      description: Records successfully processed
+
+    failure_count:
+      type: integer
+      description: Records that failed processing
+
+    skip_count:
+      type: integer
+      description: Records intentionally skipped
+
+    error_summary:
+      type: array
+      items:
+        type: object
+        fields:
+          error_type:
+            type: string
+          count:
+            type: integer
+          sample_record_ids:
+            type: array
+            items:
+              type: string
+              format: uuid
+

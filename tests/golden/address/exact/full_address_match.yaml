@@ -1,0 +1,127 @@
+# Golden Test: Full Address Exact Match
+# Complete normalized addresses match exactly
+
+test_id: ADDR-EXACT-001-001
+description: Full normalized address match produces exact tier
+rule_tested: ADDR-EXACT-001
+category: golden
+entity_type: address
+
+input:
+  record_a:
+    source_record_id: "b8c9d0e1-f2a3-4567-0123-567890123456"
+    address_type: "street"
+    street:
+      house_number: "123"
+      street_name: "Main"
+      street_type: "Street"
+    unit:
+      unit_type: "Apt"
+      unit_number: "4B"
+    locality: "New York"
+    region:
+      code: "NY"
+    postal_code:
+      code: "10001"
+    country:
+      code: "US"
+
+  record_b:
+    source_record_id: "c9d0e1f2-a3b4-5678-1234-678901234567"
+    address_type: "street"
+    street:
+      house_number: "123"
+      street_name: "MAIN"
+      street_type: "ST"
+    unit:
+      unit_type: "APT"
+      unit_number: "4B"
+    locality: "NEW YORK"
+    region:
+      code: "NY"
+    postal_code:
+      code: "10001"
+    country:
+      code: "US"
+
+expected:
+  resolution: resolved
+  tier: exact
+  rule_fired: ADDR-EXACT-001
+  entity_count: 1
+  conflicts_detected: []
+
+notes: |
+  After normalization:
+  - "Street" -> "ST", "MAIN" -> "MAIN" (case normalized)
+  - "Apt" -> "APT", "APT" -> "APT"
+  - "New York" -> "NEW YORK"
+  All components match, producing exact address match.
+
+assertions:
+  - type: tier_equals
+    expected: exact
+  - type: entities_merged
+    expected: true
+---
+test_id: ADDR-EXACT-001-002
+description: Different unit numbers prevent exact match
+rule_tested: ADDR-EXACT-001
+category: golden
+entity_type: address
+
+input:
+  record_a:
+    source_record_id: "d0e1f2a3-b4c5-6789-2345-789012345678"
+    address_type: "street"
+    street:
+      house_number: "456"
+      street_name: "Oak"
+      street_type: "Ave"
+    unit:
+      unit_type: "Suite"
+      unit_number: "100"
+    locality: "Chicago"
+    region:
+      code: "IL"
+    postal_code:
+      code: "60601"
+    country:
+      code: "US"
+
+  record_b:
+    source_record_id: "e1f2a3b4-c5d6-7890-3456-890123456789"
+    address_type: "street"
+    street:
+      house_number: "456"
+      street_name: "Oak"
+      street_type: "Ave"
+    unit:
+      unit_type: "Suite"
+      unit_number: "200"
+    locality: "Chicago"
+    region:
+      code: "IL"
+    postal_code:
+      code: "60601"
+    country:
+      code: "US"
+
+expected:
+  resolution: unresolved
+  tier: null
+  rule_fired: null
+  entity_count: 2
+  conflicts_detected: []
+
+notes: |
+  Same building (456 Oak Ave, Chicago) but different suites (100 vs 200).
+  These are distinct addresses for mail delivery purposes.
+  No match because unit numbers differ.
+
+assertions:
+  - type: tier_equals
+    expected: null
+  - type: entities_merged
+    expected: false
+

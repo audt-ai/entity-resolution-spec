@@ -1,0 +1,91 @@
+# Golden Test: Passport Exact Match
+# Two records with matching passport number and country resolve as same entity
+
+test_id: PERSON-EXACT-002-001
+description: Matching passport number and country produces exact match
+rule_tested: PERSON-EXACT-002
+category: golden
+entity_type: person
+
+input:
+  record_a:
+    source_record_id: "e5f6a7b8-c9d0-1234-ef01-345678901234"
+    identifiers:
+      passport_number: "AB1234567"
+      passport_country: "US"
+    name:
+      given_name: "Alice"
+      family_name: "Johnson"
+    date_of_birth: "1985-03-22"
+
+  record_b:
+    source_record_id: "f6a7b8c9-d0e1-2345-f012-456789012345"
+    identifiers:
+      passport_number: "AB1234567"
+      passport_country: "US"
+    name:
+      given_name: "Alice"
+      middle_names: ["Marie"]
+      family_name: "Johnson"
+    date_of_birth: "1985-03-22"
+
+expected:
+  resolution: resolved
+  tier: exact
+  rule_fired: PERSON-EXACT-002
+  entity_count: 1
+  conflicts_detected: []
+
+notes: |
+  Passport number + country is sufficient for exact match.
+  Middle name present on one record does not affect matching.
+
+assertions:
+  - type: tier_equals
+    expected: exact
+  - type: entities_merged
+    expected: true
+---
+test_id: PERSON-EXACT-002-002
+description: Same passport number but different countries does not match
+rule_tested: PERSON-EXACT-002
+category: golden
+entity_type: person
+
+input:
+  record_a:
+    source_record_id: "a7b8c9d0-e1f2-3456-0123-567890123456"
+    identifiers:
+      passport_number: "XY9876543"
+      passport_country: "US"
+    name:
+      given_name: "Bob"
+      family_name: "Williams"
+
+  record_b:
+    source_record_id: "b8c9d0e1-f2a3-4567-1234-678901234567"
+    identifiers:
+      passport_number: "XY9876543"
+      passport_country: "GB"
+    name:
+      given_name: "Robert"
+      family_name: "Williams"
+
+expected:
+  resolution: unresolved
+  tier: null
+  rule_fired: null
+  entity_count: 2
+  conflicts_detected: []
+
+notes: |
+  Passport numbers are only unique within issuing country.
+  Same number from different countries are different passports.
+  This is unresolved, not ambiguous, because the rule does not fire.
+
+assertions:
+  - type: tier_equals
+    expected: null
+  - type: entities_merged
+    expected: false
+

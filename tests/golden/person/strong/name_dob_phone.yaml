@@ -1,0 +1,97 @@
+# Golden Test: Name + DOB + Phone Strong Match
+# Multiple corroborating attributes produce strong confidence
+
+test_id: PERSON-STRONG-002-001
+description: Matching name, date of birth, and phone produces strong match
+rule_tested: PERSON-STRONG-002
+category: golden
+entity_type: person
+
+input:
+  record_a:
+    source_record_id: "d4e5f6a7-0001-4000-8000-000000000001"
+    name:
+      given_name: "Sarah"
+      family_name: "Chen"
+    date_of_birth: "1992-11-08"
+    contact:
+      phones:
+        - number: "+14155551234"
+          type: "mobile"
+
+  record_b:
+    source_record_id: "d4e5f6a7-0001-4000-8000-000000000002"
+    name:
+      given_name: "Sarah"
+      family_name: "Chen"
+    date_of_birth: "1992-11-08"
+    contact:
+      phones:
+        - number: "+14155551234"
+          type: "work"
+
+expected:
+  resolution: resolved
+  tier: strong
+  rule_fired: PERSON-STRONG-002
+  entity_count: 1
+  conflicts_detected: []
+
+notes: |
+  Name + DOB + phone number combination provides strong confidence.
+  Phone type (mobile vs work) does not affect matching.
+  No high-specificity identifiers present; cannot reach exact tier.
+
+assertions:
+  - type: tier_equals
+    expected: strong
+  - type: entities_merged
+    expected: true
+---
+test_id: PERSON-STRONG-002-002
+description: Same name and DOB with different phone numbers does not produce strong match
+rule_tested: PERSON-STRONG-002
+category: golden
+entity_type: person
+
+input:
+  record_a:
+    source_record_id: "d4e5f6a7-0001-4000-8000-000000000003"
+    name:
+      given_name: "Maria"
+      family_name: "Garcia"
+    date_of_birth: "1985-04-22"
+    contact:
+      phones:
+        - number: "+12125559876"
+          type: "mobile"
+
+  record_b:
+    source_record_id: "d4e5f6a7-0001-4000-8000-000000000004"
+    name:
+      given_name: "Maria"
+      family_name: "Garcia"
+    date_of_birth: "1985-04-22"
+    contact:
+      phones:
+        - number: "+13105554321"
+          type: "mobile"
+
+expected:
+  resolution: candidate
+  tier: weak
+  rule_fired: PERSON-WEAK-002
+  entity_count: 2
+  candidate_cluster: true
+
+notes: |
+  Name + DOB matches, but phone numbers differ.
+  Falls back to weak-tier rule (PERSON-WEAK-002).
+  Different phone numbers do not corroborate; human review needed.
+
+assertions:
+  - type: tier_equals
+    expected: weak
+  - type: entities_merged
+    expected: false
+

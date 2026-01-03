@@ -1,0 +1,391 @@
+# Address Normalization Specification
+# Defines standardization rules for address components
+
+schema_version: "1.0.0"
+description: |
+  Address normalization standardizes address components for comparison
+  while preserving original values for lineage. The goal is consistent
+  comparison, not data correction.
+
+# General principles
+principles:
+  - Normalize for comparison, not correction
+  - Preserve original values in lineage
+  - Fail open on ambiguity (do not guess)
+  - Document all transformation decisions
+  - International addresses are best-effort
+
+# Case normalization
+case_normalization:
+  rule_id: ADDR-NORM-CASE
+  description: Normalize all text to uppercase
+  applies_to:
+    - street.street_name
+    - street.street_type
+    - locality
+    - region.name
+    - country.name
+  transformation: uppercase
+  examples:
+    - input: "Main Street"
+      output: "MAIN STREET"
+    - input: "new york"
+      output: "NEW YORK"
+  notes: |
+    Uppercase is used because it is unambiguous across locales.
+    Original case is preserved in raw_address.
+
+# Whitespace normalization
+whitespace_normalization:
+  rule_id: ADDR-NORM-WHITESPACE
+  description: Normalize whitespace to single spaces
+  applies_to: all_text_fields
+  transformations:
+    - Trim leading and trailing whitespace
+    - Collapse multiple spaces to single space
+    - Remove tabs and newlines
+  examples:
+    - input: "  123   Main    Street  "
+      output: "123 MAIN STREET"
+    - input: "New\nYork"
+      output: "NEW YORK"
+
+# Punctuation removal
+punctuation_normalization:
+  rule_id: ADDR-NORM-PUNCTUATION
+  description: Remove punctuation except where meaningful
+  remove:
+    - periods (.)
+    - commas (,)
+    - apostrophes (')
+    - quotation marks (" ')
+  preserve:
+    - hyphens in compound names (e.g., "Smith-Jones")
+    - slashes in unit numbers (e.g., "1/2")
+    - pound signs when indicating unit (#)
+  examples:
+    - input: "St. Louis, MO"
+      output: "ST LOUIS MO"
+    - input: "O'Brien"
+      output: "OBRIEN"
+    - input: "Apt. #123"
+      output: "APT 123"
+
+# Street type standardization
+street_type_normalization:
+  rule_id: ADDR-NORM-STREET-TYPE
+  description: Standardize street type abbreviations
+  standard_form: abbreviated
+  mappings:
+    # Primary types
+    STREET: ST
+    AVENUE: AVE
+    BOULEVARD: BLVD
+    DRIVE: DR
+    ROAD: RD
+    LANE: LN
+    COURT: CT
+    CIRCLE: CIR
+    PLACE: PL
+    TERRACE: TER
+    WAY: WAY
+    HIGHWAY: HWY
+    PARKWAY: PKWY
+    EXPRESSWAY: EXPY
+    FREEWAY: FWY
+    # Common variations
+    STR: ST
+    AV: AVE
+    BL: BLVD
+    BLV: BLVD
+    DR: DR
+    RD: RD
+    LN: LN
+    COUR: CT
+    CRT: CT
+    CIRC: CIR
+    PLC: PL
+    PLAC: PL
+    TRCE: TER
+    TRACE: TER
+    WY: WAY
+    HY: HWY
+    HIWAY: HWY
+    PKY: PKWY
+    PRKWY: PKWY
+  examples:
+    - input: "123 MAIN STREET"
+      output: "123 MAIN ST"
+    - input: "456 ELM AVENUE"
+      output: "456 ELM AVE"
+  notes: |
+    Additional street types should be added based on source data patterns.
+    Unknown types are left as-is.
+
+# Directional standardization
+directional_normalization:
+  rule_id: ADDR-NORM-DIRECTIONAL
+  description: Standardize directional abbreviations
+  standard_form: abbreviated
+  mappings:
+    NORTH: N
+    SOUTH: S
+    EAST: E
+    WEST: W
+    NORTHEAST: NE
+    NORTHWEST: NW
+    SOUTHEAST: SE
+    SOUTHWEST: SW
+    NO: N
+    SO: S
+    EA: E
+    WE: W
+  examples:
+    - input: "123 NORTH MAIN ST"
+      output: "123 N MAIN ST"
+    - input: "456 SOUTHEAST ELM AVE"
+      output: "456 SE ELM AVE"
+
+# Unit type standardization
+unit_type_normalization:
+  rule_id: ADDR-NORM-UNIT-TYPE
+  description: Standardize secondary unit type designators
+  standard_form: abbreviated
+  mappings:
+    APARTMENT: APT
+    APRTMNT: APT
+    APRTMT: APT
+    SUITE: STE
+    UNIT: UNIT
+    FLOOR: FL
+    ROOM: RM
+    BUILDING: BLDG
+    BLD: BLDG
+    DEPARTMENT: DEPT
+    SPACE: SPC
+    LOT: LOT
+    TRAILER: TRLR
+    "#": UNIT
+    "NUMBER": UNIT
+    "NO": UNIT
+    PMB: PMB
+    "PRIVATE MAILBOX": PMB
+  examples:
+    - input: "APT 123"
+      output: "APT 123"
+    - input: "SUITE 456"
+      output: "STE 456"
+    - input: "#789"
+      output: "UNIT 789"
+  notes: |
+    The pound sign (#) is normalized to UNIT for consistency.
+    Some systems treat # differently than APT.
+
+# State/Province standardization (US)
+us_state_normalization:
+  rule_id: ADDR-NORM-US-STATE
+  description: Standardize US state names to postal abbreviations
+  standard_form: two_letter_code
+  mappings:
+    ALABAMA: AL
+    ALASKA: AK
+    ARIZONA: AZ
+    ARKANSAS: AR
+    CALIFORNIA: CA
+    COLORADO: CO
+    CONNECTICUT: CT
+    DELAWARE: DE
+    FLORIDA: FL
+    GEORGIA: GA
+    HAWAII: HI
+    IDAHO: ID
+    ILLINOIS: IL
+    INDIANA: IN
+    IOWA: IA
+    KANSAS: KS
+    KENTUCKY: KY
+    LOUISIANA: LA
+    MAINE: ME
+    MARYLAND: MD
+    MASSACHUSETTS: MA
+    MICHIGAN: MI
+    MINNESOTA: MN
+    MISSISSIPPI: MS
+    MISSOURI: MO
+    MONTANA: MT
+    NEBRASKA: NE
+    NEVADA: NV
+    NEW HAMPSHIRE: NH
+    NEW JERSEY: NJ
+    NEW MEXICO: NM
+    NEW YORK: NY
+    NORTH CAROLINA: NC
+    NORTH DAKOTA: ND
+    OHIO: OH
+    OKLAHOMA: OK
+    OREGON: OR
+    PENNSYLVANIA: PA
+    RHODE ISLAND: RI
+    SOUTH CAROLINA: SC
+    SOUTH DAKOTA: SD
+    TENNESSEE: TN
+    TEXAS: TX
+    UTAH: UT
+    VERMONT: VT
+    VIRGINIA: VA
+    WASHINGTON: WA
+    WEST VIRGINIA: WV
+    WISCONSIN: WI
+    WYOMING: WY
+    DISTRICT OF COLUMBIA: DC
+    # Territories
+    PUERTO RICO: PR
+    VIRGIN ISLANDS: VI
+    GUAM: GU
+    AMERICAN SAMOA: AS
+    NORTHERN MARIANA ISLANDS: MP
+  examples:
+    - input: "CALIFORNIA"
+      output: "CA"
+    - input: "NEW YORK"
+      output: "NY"
+
+# PO Box normalization
+po_box_normalization:
+  rule_id: ADDR-NORM-PO-BOX
+  description: Standardize PO Box designations
+  standard_form: "PO BOX"
+  patterns_to_match:
+    - "P\\.?O\\.? BOX"
+    - "POST OFFICE BOX"
+    - "P\\.?O\\.?B\\.?"
+    - "BOX"
+  transformation: "PO BOX [number]"
+  examples:
+    - input: "P.O. Box 123"
+      output: "PO BOX 123"
+    - input: "Post Office Box 456"
+      output: "PO BOX 456"
+  notes: |
+    PO Box addresses are distinct from street addresses.
+    They should not be normalized to street format.
+
+# Rural route normalization
+rural_route_normalization:
+  rule_id: ADDR-NORM-RURAL
+  description: Standardize rural route designations
+  standard_form: "RR [route] BOX [box]"
+  patterns_to_match:
+    - "R\\.?R\\.? ?[0-9]+"
+    - "RURAL ROUTE [0-9]+"
+    - "RFD [0-9]+"
+    - "RURAL FREE DELIVERY [0-9]+"
+  examples:
+    - input: "RR 1 Box 234"
+      output: "RR 1 BOX 234"
+    - input: "Rural Route 2"
+      output: "RR 2"
+
+# Military address normalization
+military_normalization:
+  rule_id: ADDR-NORM-MILITARY
+  description: Standardize military address designations
+  apo_fpo_dpo:
+    standard_forms:
+      - APO (Army/Air Force Post Office)
+      - FPO (Fleet Post Office)
+      - DPO (Diplomatic Post Office)
+    localities:
+      "APO AA": "APO AE"  # Americas
+      "APO AE": "APO AE"  # Europe/Africa/Middle East
+      "APO AP": "APO AP"  # Pacific
+      "FPO AA": "FPO AA"
+      "FPO AE": "FPO AE"
+      "FPO AP": "FPO AP"
+  examples:
+    - input: "PSC 123 BOX 456, APO AE 09001"
+      output: "PSC 123 BOX 456 APO AE 09001"
+
+# Postal code normalization
+postal_code_normalization:
+  rule_id: ADDR-NORM-POSTAL
+  description: Normalize postal codes by country
+  us_zip:
+    format: "XXXXX or XXXXX-XXXX"
+    transformation:
+      - Remove non-numeric characters
+      - Format as 5 digits or 5+4 with hyphen
+    examples:
+      - input: "12345-6789"
+        output: "12345-6789"
+      - input: "123456789"
+        output: "12345-6789"
+      - input: "12345"
+        output: "12345"
+  canada_postal:
+    format: "A1A 1A1"
+    transformation:
+      - Uppercase letters
+      - Remove extra spaces
+      - Format as A1A 1A1 with single space
+  uk_postcode:
+    format: "varies"
+    transformation:
+      - Uppercase
+      - Single space before inward code
+  notes: |
+    International postal code formats vary widely.
+    Unknown formats are stored as-is after whitespace normalization.
+
+# Known failure modes
+failure_modes:
+  - mode: International addresses
+    description: |
+      Non-US/Canadian addresses have highly variable formats.
+      Normalization is limited to case and whitespace.
+    mitigation: |
+      Original address preserved; best-effort normalization applied.
+
+  - mode: Building names
+    description: |
+      Addresses that use building names instead of street numbers
+      (e.g., "Empire State Building") may not parse correctly.
+    mitigation: |
+      Preserve in raw_address; flag for manual review if parsing fails.
+
+  - mode: Vanity addresses
+    description: |
+      Addresses with custom street names for marketing purposes
+      may not match underlying postal addresses.
+    mitigation: |
+      No automated correction; store as received.
+
+  - mode: New construction
+    description: |
+      Recently constructed addresses may not appear in postal databases.
+    mitigation: |
+      Do not validate against postal authority; store as received.
+
+  - mode: Address corrections by external services
+    description: |
+      USPS or other validation services may "correct" addresses in ways
+      that break linkage to source records.
+    mitigation: |
+      Store original and corrected separately; document correction source.
+
+# Validation rules
+validation:
+  - rule: postal_code_format_us
+    description: US ZIP codes must be 5 or 9 digits
+    pattern: "^[0-9]{5}(-[0-9]{4})?$"
+    severity: warning
+
+  - rule: state_code_valid_us
+    description: US state codes must be valid
+    valid_values: [AL, AK, AZ, AR, CA, CO, CT, DE, FL, GA, HI, ID, IL, IN, IA, KS, KY, LA, ME, MD, MA, MI, MN, MS, MO, MT, NE, NV, NH, NJ, NM, NY, NC, ND, OH, OK, OR, PA, RI, SC, SD, TN, TX, UT, VT, VA, WA, WV, WI, WY, DC, PR, VI, GU, AS, MP]
+    severity: warning
+
+  - rule: country_code_valid
+    description: Country codes must be ISO 3166-1 alpha-2
+    severity: warning
+

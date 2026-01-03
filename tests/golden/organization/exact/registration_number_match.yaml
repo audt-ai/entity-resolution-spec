@@ -1,0 +1,95 @@
+# Golden Test: Registration Number Exact Match
+# Organizations with matching registration number within same jurisdiction resolve as same entity
+
+test_id: ORG-EXACT-003-001
+description: Matching registration number within same jurisdiction produces exact match
+rule_tested: ORG-EXACT-003
+category: golden
+entity_type: organization
+
+input:
+  record_a:
+    source_record_id: "c3d4e5f6-0001-4000-8000-000000000001"
+    identifiers:
+      registration_number: "12345678"
+    names:
+      legal_name: "Northern Services Ltd"
+    jurisdiction:
+      country: "GB"
+      state_province: null
+
+  record_b:
+    source_record_id: "c3d4e5f6-0001-4000-8000-000000000002"
+    identifiers:
+      registration_number: "12345678"
+    names:
+      legal_name: "Northern Services Limited"
+    jurisdiction:
+      country: "GB"
+      state_province: null
+
+expected:
+  resolution: resolved
+  tier: exact
+  rule_fired: ORG-EXACT-003
+  entity_count: 1
+  conflicts_detected: []
+
+notes: |
+  Registration number + jurisdiction is sufficient for exact match.
+  Name variations (Ltd vs Limited) do not prevent match.
+  Registration numbers are unique within their issuing jurisdiction.
+
+assertions:
+  - type: tier_equals
+    expected: exact
+  - type: entities_merged
+    expected: true
+  - type: rule_fired
+    expected: ORG-EXACT-003
+---
+test_id: ORG-EXACT-003-002
+description: Same registration number in different jurisdictions does not match
+rule_tested: ORG-EXACT-003
+category: golden
+entity_type: organization
+
+input:
+  record_a:
+    source_record_id: "c3d4e5f6-0001-4000-8000-000000000003"
+    identifiers:
+      registration_number: "1234567"
+    names:
+      legal_name: "ABC Corporation"
+    jurisdiction:
+      country: "US"
+      state_province: "DE"
+
+  record_b:
+    source_record_id: "c3d4e5f6-0001-4000-8000-000000000004"
+    identifiers:
+      registration_number: "1234567"
+    names:
+      legal_name: "ABC Corporation"
+    jurisdiction:
+      country: "US"
+      state_province: "NY"
+
+expected:
+  resolution: unresolved
+  tier: null
+  rule_fired: null
+  entity_count: 2
+  conflicts_detected: []
+
+notes: |
+  Registration numbers are only unique within their jurisdiction.
+  Same number in Delaware (DE) and New York (NY) are different companies.
+  Rule requires registration_number + country + state_province to all match.
+
+assertions:
+  - type: tier_equals
+    expected: null
+  - type: entities_merged
+    expected: false
+

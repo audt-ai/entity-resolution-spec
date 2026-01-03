@@ -1,0 +1,274 @@
+# Invariant Tests: System-Wide Properties
+# Properties that must hold for all inputs
+
+# =============================================================================
+# INV-001: Resolution Determinism
+# =============================================================================
+
+invariant_id: INV-001
+name: Resolution Determinism
+description: Same inputs always produce same outputs
+category: invariant
+
+property: |
+  For any two records A and B:
+    resolve(A, B) == resolve(A, B)
+  
+  Repeated execution with identical inputs produces identical results.
+  No randomness, no time-dependent logic, no external state affects resolution.
+
+test_approach: |
+  1. Generate random valid record pairs
+  2. Run resolution N times (e.g., N=100)
+  3. Verify all N results are identical
+
+violation_severity: critical
+violation_impact: |
+  Non-deterministic resolution undermines:
+  - Audit requirements (cannot reproduce past decisions)
+  - Testing (tests become flaky)
+  - Trust (different results at different times)
+
+implementation_notes: |
+  - No use of current timestamp in resolution logic
+  - No use of random number generators
+  - No dependency on insertion order in sets/maps
+  - No dependency on external services that may return different results
+
+# =============================================================================
+# INV-002: Resolution Symmetry
+# =============================================================================
+
+invariant_id: INV-002
+name: Resolution Symmetry
+description: Order of inputs does not affect result
+category: invariant
+
+property: |
+  For any two records A and B:
+    resolve(A, B) == resolve(B, A)
+  
+  The order in which records are presented does not change the resolution.
+
+test_approach: |
+  1. Generate random valid record pairs
+  2. Run resolve(A, B) and resolve(B, A)
+  3. Verify results are identical
+
+violation_severity: critical
+violation_impact: |
+  Asymmetric resolution means:
+  - Ingestion order affects entity graph
+  - Same data processed in different order produces different results
+  - Audit becomes impossible
+
+implementation_notes: |
+  - Comparison operations must be symmetric
+  - No "primary" or "secondary" record concept in matching
+  - Field priority applies to both records equally
+
+# =============================================================================
+# INV-003: Monotonic Confidence
+# =============================================================================
+
+invariant_id: INV-003
+name: Monotonic Confidence
+description: Removing information cannot increase confidence
+category: invariant
+
+property: |
+  For any two records A and B where resolve(A, B) produces tier T:
+    Let A' be A with one field removed or set to null
+    Let T' be the tier from resolve(A', B)
+    Then T' <= T
+  
+  Confidence ordering: exact > strong > weak > unresolved
+
+test_approach: |
+  1. Generate record pairs that produce each tier
+  2. Remove one field from one record
+  3. Re-run resolution
+  4. Verify new tier is same or lower than original
+
+violation_severity: high
+violation_impact: |
+  If removing data increases confidence:
+  - Perverse incentive to drop data
+  - Less information produces stronger claims
+  - Violates basic logic of evidence
+
+implementation_notes: |
+  - Rules are designed to require fields, not benefit from their absence
+  - Missing fields prevent rule firing, not enable it
+  - Conflict indicators require fields to be present to fire
+
+# =============================================================================
+# INV-004: Tier Boundaries
+# =============================================================================
+
+invariant_id: INV-004
+name: Tier Boundaries
+description: Weak matches never automatically escalate to strong
+category: invariant
+
+property: |
+  For any set of records where all pairwise resolutions produce weak matches:
+    The aggregate resolution is weak.
+    Accumulating weak evidence does not produce strong matches.
+
+test_approach: |
+  1. Create N records (N > 2) that pairwise produce weak matches
+  2. Process all N records
+  3. Verify no strong or exact matches are produced
+  4. Verify only candidate clusters exist
+
+violation_severity: critical
+violation_impact: |
+  If weak signals accumulate to strong:
+  - Many weak false positives combine into confident false positive
+  - Undermines confidence tier semantics
+  - Violates design principle that new evidence is required
+
+implementation_notes: |
+  - Tier assignment is per-rule, not aggregated
+  - Multiple weak matches produce larger candidate cluster, not strong match
+  - Only new evidence (new field values) can change tier
+
+# =============================================================================
+# INV-005: Reflexivity
+# =============================================================================
+
+invariant_id: INV-005
+name: Reflexivity
+description: A record always matches itself at exact tier
+category: invariant
+
+property: |
+  For any record A:
+    resolve(A, A) produces tier exact
+  
+  Every record is identical to itself.
+
+test_approach: |
+  1. Generate random valid records
+  2. Run resolve(A, A) for each
+  3. Verify exact tier
+
+violation_severity: low
+violation_impact: |
+  Primarily a sanity check.
+  Real-world impact is minimal since same record from same source
+  should be deduplicated before resolution.
+
+implementation_notes: |
+  - May be handled as special case in implementation
+  - Or naturally falls out of exact match rules
+
+# =============================================================================
+# INV-006: Idempotency
+# =============================================================================
+
+invariant_id: INV-006
+name: Idempotency
+description: Processing the same record twice produces same entity graph
+category: invariant
+
+property: |
+  Let G be the entity graph after processing record R.
+  Let G' be the entity graph after processing R again.
+  Then G == G'
+
+test_approach: |
+  1. Process a batch of records to produce entity graph G
+  2. Process the same batch again
+  3. Verify entity graph is unchanged
+
+violation_severity: high
+violation_impact: |
+  Non-idempotent processing means:
+  - Duplicate records cause entity splits or merges
+  - System state depends on whether data was sent once or twice
+  - Data replays cause corruption
+
+implementation_notes: |
+  - Source record deduplication by source_system_id + source_record_key
+  - Entity merges are idempotent (merging same pair twice = once)
+  - Resolution decisions track processed records
+
+# =============================================================================
+# INV-007: Conflict Visibility
+# =============================================================================
+
+invariant_id: INV-007
+name: Conflict Visibility
+description: Conflicts are never silently resolved
+category: invariant
+
+property: |
+  For any resolution where a conflict indicator fires:
+    The result is ambiguous, not resolved
+    A conflict record is created
+    Human review is required
+
+test_approach: |
+  1. Create record pairs that trigger each conflict indicator
+  2. Run resolution
+  3. Verify ambiguous result
+  4. Verify conflict record exists
+  5. Verify requires_review flag is set
+
+violation_severity: critical
+violation_impact: |
+  Silent conflict resolution means:
+  - False positives enter system without detection
+  - Audit trail is incomplete
+  - No opportunity for human correction
+
+implementation_notes: |
+  - Conflict indicators are evaluated after match rule fires
+  - Any triggered conflict indicator converts match to ambiguous
+  - All conflict details are logged
+
+# =============================================================================
+# INV-008: Lineage Completeness
+# =============================================================================
+
+invariant_id: INV-008
+name: Lineage Completeness
+description: Every entity attribute traces to source record
+category: invariant
+
+property: |
+  For every entity E and every populated field F on E:
+    There exists a transformation chain from F to some source record
+    The chain documents all transformations applied
+
+test_approach: |
+  1. Create entities from source records
+  2. For each entity field, query lineage
+  3. Verify lineage chain exists
+  4. Verify chain reaches source record
+
+violation_severity: high
+violation_impact: |
+  Incomplete lineage means:
+  - Cannot audit entity data origin
+  - Cannot verify correctness
+  - Cannot trace errors to source
+
+implementation_notes: |
+  - Transformation chains created during ingestion
+  - No field population without corresponding chain
+  - Enrichment adds to chain, does not replace
+
+# =============================================================================
+# Test Execution Configuration
+# =============================================================================
+
+execution:
+  run_frequency: every_commit
+  sample_size: 1000  # Records per invariant test
+  timeout_per_invariant: 60s
+  fail_fast: false  # Run all invariants even if one fails
+  report_format: junit_xml
+

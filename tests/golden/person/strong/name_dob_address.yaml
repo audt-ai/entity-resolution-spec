@@ -1,0 +1,97 @@
+# Golden Test: Name + DOB + Address Strong Match
+# Multiple corroborating attributes produce strong match
+
+test_id: PERSON-STRONG-001-001
+description: Matching name, DOB, and address produces strong match
+rule_tested: PERSON-STRONG-001
+category: golden
+entity_type: person
+
+input:
+  record_a:
+    source_record_id: "c9d0e1f2-a3b4-5678-2345-789012345678"
+    name:
+      given_name: "Michael"
+      family_name: "Brown"
+    date_of_birth: "1990-07-04"
+    addresses:
+      - address_entity_id: "addr-100"
+        address_type: "residential"
+        effective_from: "2020-01-01"
+
+  record_b:
+    source_record_id: "d0e1f2a3-b4c5-6789-3456-890123456789"
+    name:
+      given_name: "Michael"
+      family_name: "Brown"
+    date_of_birth: "1990-07-04"
+    addresses:
+      - address_entity_id: "addr-100"
+        address_type: "mailing"
+        effective_from: "2021-06-15"
+
+expected:
+  resolution: resolved
+  tier: strong
+  rule_fired: PERSON-STRONG-001
+  entity_count: 1
+  conflicts_detected: []
+
+notes: |
+  Name + DOB + shared address is sufficient for strong match.
+  Address type (residential vs mailing) does not affect matching.
+  No high-specificity identifiers present to produce exact match.
+
+assertions:
+  - type: tier_equals
+    expected: strong
+  - type: entities_merged
+    expected: true
+  - type: rule_fired
+    expected: PERSON-STRONG-001
+---
+test_id: PERSON-STRONG-001-002
+description: Name normalization allows matching with case differences
+rule_tested: PERSON-STRONG-001
+category: golden
+entity_type: person
+
+input:
+  record_a:
+    source_record_id: "e1f2a3b4-c5d6-7890-4567-901234567890"
+    name:
+      given_name: "SARAH"
+      family_name: "DAVIS"
+    date_of_birth: "1988-12-25"
+    addresses:
+      - address_entity_id: "addr-200"
+        address_type: "residential"
+
+  record_b:
+    source_record_id: "f2a3b4c5-d6e7-8901-5678-012345678901"
+    name:
+      given_name: "Sarah"
+      family_name: "Davis"
+    date_of_birth: "1988-12-25"
+    addresses:
+      - address_entity_id: "addr-200"
+        address_type: "residential"
+
+expected:
+  resolution: resolved
+  tier: strong
+  rule_fired: PERSON-STRONG-001
+  entity_count: 1
+  conflicts_detected: []
+
+notes: |
+  Name normalization handles case differences.
+  "SARAH DAVIS" matches "Sarah Davis" after normalization.
+
+assertions:
+  - type: tier_equals
+    expected: strong
+  - type: normalization_applied
+    field: name.given_name
+    expected: true
+

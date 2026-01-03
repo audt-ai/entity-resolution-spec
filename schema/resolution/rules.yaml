@@ -1,0 +1,630 @@
+# Resolution Rules Schema
+# Defines the structure and semantics of deterministic resolution rules
+
+schema_version: "1.0.0"
+description: |
+  Resolution rules are deterministic conditions that, when satisfied, indicate
+  that two records refer to the same entity. Rules are organized by tier
+  (exact, strong, weak) and evaluated in precedence order.
+
+# Rule definition schema
+rule_schema:
+  fields:
+    rule_id:
+      type: string
+      required: true
+      pattern: "^[A-Z]+-[A-Z]+-[0-9]{3}$"
+      description: |
+        Unique identifier for the rule.
+        Format: {ENTITY}-{TIER}-{SEQUENCE}
+        Examples: PERSON-EXACT-001, ORG-STRONG-002, ADDR-WEAK-001
+
+    entity_type:
+      type: string
+      required: true
+      enum:
+        - person
+        - organization
+        - address
+      description: Entity type this rule applies to
+
+    tier:
+      type: string
+      required: true
+      enum:
+        - exact
+        - strong
+        - weak
+      description: Match tier produced when this rule fires
+
+    description:
+      type: string
+      required: true
+      max_length: 500
+      description: Human-readable description of what this rule matches
+
+    required_fields:
+      type: array
+      required: true
+      items:
+        type: string
+      description: |
+        List of field paths that must be present (non-null) for this rule
+        to be evaluated. If any required field is missing, the rule does
+        not fire and no match is produced.
+
+    match_condition:
+      type: object
+      required: true
+      description: The deterministic condition for a match
+      fields:
+        type:
+          type: string
+          enum:
+            - all_of  # All sub-conditions must be true
+            - any_of  # At least one sub-condition must be true
+          description: How sub-conditions are combined
+
+        conditions:
+          type: array
+          items:
+            type: object
+            fields:
+              field_a:
+                type: string
+                description: Field path on record A
+              field_b:
+                type: string
+                description: Field path on record B
+              operator:
+                type: string
+                enum:
+                  - equals  # Exact equality after normalization
+                  - equals_any  # Field A equals any value in array field B
+                  - reference_resolves  # Entity references resolve to same entity
+                description: Comparison operator
+              normalization:
+                type: string
+                description: |
+                  Normalization to apply before comparison.
+                  References normalization spec by name.
+
+    conflict_indicators:
+      type: array
+      items:
+        type: object
+        fields:
+          field_a:
+            type: string
+          field_b:
+            type: string
+          description:
+            type: string
+      description: |
+        Field pairs that, if both present and different, indicate a conflict.
+        When a conflict indicator triggers, the match is marked as ambiguous
+        rather than resolved, even if the match condition is satisfied.
+
+    precedence:
+      type: integer
+      minimum: 1
+      description: |
+        Evaluation order within the tier. Lower numbers are evaluated first.
+        If not specified, rules are evaluated in rule_id order.
+
+    notes:
+      type: string
+      description: Additional context about this rule's purpose or edge cases
+
+    enabled:
+      type: boolean
+      default: true
+      description: Whether this rule is active. Disabled rules are skipped.
+
+# Person resolution rules
+person_rules:
+  exact:
+    - rule_id: PERSON-EXACT-001
+      entity_type: person
+      tier: exact
+      description: Match on Social Security Number
+      required_fields:
+        - identifiers.ssn
+      match_condition:
+        type: all_of
+        conditions:
+          - field_a: identifiers.ssn
+            field_b: identifiers.ssn
+            operator: equals
+            normalization: ssn
+      conflict_indicators:
+        - field_a: date_of_birth
+          field_b: date_of_birth
+          description: Matching SSN with different DOB suggests data quality issue or fraud
+      notes: |
+        SSN is authoritative for US persons. Conflicts with DOB are flagged
+        because they may indicate SSN reuse, data entry error, or fraud.
+
+    - rule_id: PERSON-EXACT-002
+      entity_type: person
+      tier: exact
+      description: Match on passport number and issuing country
+      required_fields:
+        - identifiers.passport_number
+        - identifiers.passport_country
+      match_condition:
+        type: all_of
+        conditions:
+          - field_a: identifiers.passport_number
+            field_b: identifiers.passport_number
+            operator: equals
+            normalization: passport
+          - field_a: identifiers.passport_country
+            field_b: identifiers.passport_country
+            operator: equals
+      conflict_indicators:
+        - field_a: name.family_name
+          field_b: name.family_name
+          description: Matching passport with significantly different name
+
+    - rule_id: PERSON-EXACT-003
+      entity_type: person
+      tier: exact
+      description: Match on national ID and issuing country
+      required_fields:
+        - identifiers.national_id
+        - identifiers.national_id_country
+      match_condition:
+        type: all_of
+        conditions:
+          - field_a: identifiers.national_id
+            field_b: identifiers.national_id
+            operator: equals
+          - field_a: identifiers.national_id_country
+            field_b: identifiers.national_id_country
+            operator: equals
+
+  strong:
+    - rule_id: PERSON-STRONG-001
+      entity_type: person
+      tier: strong
+      description: Match on name, date of birth, and shared address
+      required_fields:
+        - name.given_name
+        - name.family_name
+        - date_of_birth
+        - addresses
+      match_condition:
+        type: all_of
+        conditions:
+          - field_a: name.given_name
+            field_b: name.given_name
+            operator: equals
+            normalization: person_name
+          - field_a: name.family_name
+            field_b: name.family_name
+            operator: equals
+            normalization: person_name
+          - field_a: date_of_birth
+            field_b: date_of_birth
+            operator: equals
+          - field_a: addresses
+            field_b: addresses
+            operator: reference_resolves
+      conflict_indicators:
+        - field_a: identifiers.ssn
+          field_b: identifiers.ssn
+          description: Different SSNs indicate different people
+
+    - rule_id: PERSON-STRONG-002
+      entity_type: person
+      tier: strong
+      description: Match on name, date of birth, and phone
+      required_fields:
+        - name.given_name
+        - name.family_name
+        - date_of_birth
+        - contact.phones
+      match_condition:
+        type: all_of
+        conditions:
+          - field_a: name.given_name
+            field_b: name.given_name
+            operator: equals
+            normalization: person_name
+          - field_a: name.family_name
+            field_b: name.family_name
+            operator: equals
+            normalization: person_name
+          - field_a: date_of_birth
+            field_b: date_of_birth
+            operator: equals
+          - field_a: contact.phones
+            field_b: contact.phones
+            operator: equals_any
+            normalization: phone
+
+    - rule_id: PERSON-STRONG-003
+      entity_type: person
+      tier: strong
+      description: Match on name, date of birth, and email
+      required_fields:
+        - name.given_name
+        - name.family_name
+        - date_of_birth
+        - contact.emails
+      match_condition:
+        type: all_of
+        conditions:
+          - field_a: name.given_name
+            field_b: name.given_name
+            operator: equals
+            normalization: person_name
+          - field_a: name.family_name
+            field_b: name.family_name
+            operator: equals
+            normalization: person_name
+          - field_a: date_of_birth
+            field_b: date_of_birth
+            operator: equals
+          - field_a: contact.emails
+            field_b: contact.emails
+            operator: equals_any
+            normalization: email
+
+  weak:
+    - rule_id: PERSON-WEAK-001
+      entity_type: person
+      tier: weak
+      description: Match on name and shared address (no DOB)
+      required_fields:
+        - name.given_name
+        - name.family_name
+        - addresses
+      match_condition:
+        type: all_of
+        conditions:
+          - field_a: name.given_name
+            field_b: name.given_name
+            operator: equals
+            normalization: person_name
+          - field_a: name.family_name
+            field_b: name.family_name
+            operator: equals
+            normalization: person_name
+          - field_a: addresses
+            field_b: addresses
+            operator: reference_resolves
+      conflict_indicators:
+        - field_a: date_of_birth
+          field_b: date_of_birth
+          description: Different DOB suggests different people
+      notes: |
+        Without DOB, name + address is insufficient for confident resolution.
+        Common names at shared addresses (family members, roommates) are
+        frequent false positive sources.
+
+    - rule_id: PERSON-WEAK-002
+      entity_type: person
+      tier: weak
+      description: Match on name and date of birth (no address)
+      required_fields:
+        - name.given_name
+        - name.family_name
+        - date_of_birth
+      match_condition:
+        type: all_of
+        conditions:
+          - field_a: name.given_name
+            field_b: name.given_name
+            operator: equals
+            normalization: person_name
+          - field_a: name.family_name
+            field_b: name.family_name
+            operator: equals
+            normalization: person_name
+          - field_a: date_of_birth
+            field_b: date_of_birth
+            operator: equals
+      notes: |
+        Without address corroboration, twins and people with common names
+        sharing a birthday may produce false positives.
+
+# Organization resolution rules
+organization_rules:
+  exact:
+    - rule_id: ORG-EXACT-001
+      entity_type: organization
+      tier: exact
+      description: Match on EIN
+      required_fields:
+        - identifiers.ein
+      match_condition:
+        type: all_of
+        conditions:
+          - field_a: identifiers.ein
+            field_b: identifiers.ein
+            operator: equals
+            normalization: ein
+      conflict_indicators:
+        - field_a: jurisdiction.country
+          field_b: jurisdiction.country
+          description: EIN is US-only; different country indicates error
+
+    - rule_id: ORG-EXACT-002
+      entity_type: organization
+      tier: exact
+      description: Match on LEI
+      required_fields:
+        - identifiers.lei
+      match_condition:
+        type: all_of
+        conditions:
+          - field_a: identifiers.lei
+            field_b: identifiers.lei
+            operator: equals
+      notes: LEI is globally unique; no additional validation needed
+
+    - rule_id: ORG-EXACT-003
+      entity_type: organization
+      tier: exact
+      description: Match on registration number within jurisdiction
+      required_fields:
+        - identifiers.registration_number
+        - jurisdiction.country
+      match_condition:
+        type: all_of
+        conditions:
+          - field_a: identifiers.registration_number
+            field_b: identifiers.registration_number
+            operator: equals
+          - field_a: jurisdiction.country
+            field_b: jurisdiction.country
+            operator: equals
+          - field_a: jurisdiction.state_province
+            field_b: jurisdiction.state_province
+            operator: equals
+
+  strong:
+    - rule_id: ORG-STRONG-001
+      entity_type: organization
+      tier: strong
+      description: Match on legal name, jurisdiction, and address
+      required_fields:
+        - names.legal_name
+        - jurisdiction.country
+        - addresses
+      match_condition:
+        type: all_of
+        conditions:
+          - field_a: names.legal_name
+            field_b: names.legal_name
+            operator: equals
+            normalization: org_name
+          - field_a: jurisdiction.country
+            field_b: jurisdiction.country
+            operator: equals
+          - field_a: addresses
+            field_b: addresses
+            operator: reference_resolves
+
+    - rule_id: ORG-STRONG-002
+      entity_type: organization
+      tier: strong
+      description: Match on legal name, jurisdiction, and formation date
+      required_fields:
+        - names.legal_name
+        - jurisdiction.country
+        - formation_date
+      match_condition:
+        type: all_of
+        conditions:
+          - field_a: names.legal_name
+            field_b: names.legal_name
+            operator: equals
+            normalization: org_name
+          - field_a: jurisdiction.country
+            field_b: jurisdiction.country
+            operator: equals
+          - field_a: formation_date
+            field_b: formation_date
+            operator: equals
+
+  weak:
+    - rule_id: ORG-WEAK-001
+      entity_type: organization
+      tier: weak
+      description: Match on legal name and jurisdiction only
+      required_fields:
+        - names.legal_name
+        - jurisdiction.country
+      match_condition:
+        type: all_of
+        conditions:
+          - field_a: names.legal_name
+            field_b: names.legal_name
+            operator: equals
+            normalization: org_name
+          - field_a: jurisdiction.country
+            field_b: jurisdiction.country
+            operator: equals
+      conflict_indicators:
+        - field_a: formation_date
+          field_b: formation_date
+          description: Same name in same jurisdiction but different formation dates
+        - field_a: addresses
+          field_b: addresses
+          description: Different addresses may indicate different entities
+      notes: |
+        Many organizations share names within a jurisdiction. Without
+        additional corroboration, this is insufficient for confident resolution.
+
+# Address resolution rules
+address_rules:
+  exact:
+    - rule_id: ADDR-EXACT-001
+      entity_type: address
+      tier: exact
+      description: Full normalized address match
+      required_fields:
+        - street
+        - locality
+        - postal_code.code
+        - country.code
+      match_condition:
+        type: all_of
+        conditions:
+          - field_a: street.house_number
+            field_b: street.house_number
+            operator: equals
+          - field_a: street.street_name
+            field_b: street.street_name
+            operator: equals
+            normalization: street_name
+          - field_a: street.street_type
+            field_b: street.street_type
+            operator: equals
+            normalization: street_type
+          - field_a: unit.unit_number
+            field_b: unit.unit_number
+            operator: equals
+          - field_a: locality
+            field_b: locality
+            operator: equals
+            normalization: locality
+          - field_a: region.code
+            field_b: region.code
+            operator: equals
+          - field_a: postal_code.code
+            field_b: postal_code.code
+            operator: equals
+          - field_a: country.code
+            field_b: country.code
+            operator: equals
+
+  strong:
+    - rule_id: ADDR-STRONG-001
+      entity_type: address
+      tier: strong
+      description: Match on street, locality, and postal code
+      required_fields:
+        - street.house_number
+        - street.street_name
+        - locality
+        - postal_code.code
+      match_condition:
+        type: all_of
+        conditions:
+          - field_a: street.house_number
+            field_b: street.house_number
+            operator: equals
+          - field_a: street.street_name
+            field_b: street.street_name
+            operator: equals
+            normalization: street_name
+          - field_a: locality
+            field_b: locality
+            operator: equals
+            normalization: locality
+          - field_a: postal_code.code
+            field_b: postal_code.code
+            operator: equals
+      conflict_indicators:
+        - field_a: unit.unit_number
+          field_b: unit.unit_number
+          description: Different units in same building are different addresses
+
+    - rule_id: ADDR-STRONG-002
+      entity_type: address
+      tier: strong
+      description: Match on PO Box within postal code
+      required_fields:
+        - po_box.box_number
+        - locality
+        - postal_code.code
+      match_condition:
+        type: all_of
+        conditions:
+          - field_a: po_box.box_number
+            field_b: po_box.box_number
+            operator: equals
+          - field_a: locality
+            field_b: locality
+            operator: equals
+            normalization: locality
+          - field_a: postal_code.code
+            field_b: postal_code.code
+            operator: equals
+
+  weak:
+    - rule_id: ADDR-WEAK-001
+      entity_type: address
+      tier: weak
+      description: Match on street and locality (no postal code)
+      required_fields:
+        - street.house_number
+        - street.street_name
+        - locality
+      match_condition:
+        type: all_of
+        conditions:
+          - field_a: street.house_number
+            field_b: street.house_number
+            operator: equals
+          - field_a: street.street_name
+            field_b: street.street_name
+            operator: equals
+            normalization: street_name
+          - field_a: locality
+            field_b: locality
+            operator: equals
+            normalization: locality
+      notes: |
+        Without postal code, street names may repeat across localities
+        with the same name in different regions.
+
+# Rule evaluation configuration
+evaluation:
+  description: |
+    Rules are evaluated in tier order (exact → strong → weak).
+    Within each tier, rules are evaluated in precedence order.
+    Evaluation stops when a match is found (unless conflicts exist).
+
+  tier_order:
+    - exact
+    - strong
+    - weak
+
+  behavior:
+    on_match_with_no_conflict:
+      description: Resolution is complete at the firing rule's tier
+      action: return_resolution
+
+    on_match_with_conflict:
+      description: Resolution is marked as ambiguous
+      action: flag_for_review
+
+    on_no_match:
+      description: Continue to next rule or tier
+      action: continue
+
+    on_multiple_matches_same_tier:
+      description: All matching rules are recorded; resolution uses highest-confidence match
+      action: record_all_continue
+
+  placeholder_values:
+    description: |
+      Values that should be treated as missing data, not matched.
+      These prevent false positives from placeholder data that
+      passed upstream validation.
+    patterns:
+      - "^N/?A$"
+      - "^UNKNOWN$"
+      - "^NONE$"
+      - "^NULL$"
+      - "^-+$"
+      - "^X+$"
+      - "^0+$"
+      - "^9{9}$"  # 999999999 (common SSN placeholder)
+      - "^123-?45-?6789$"  # Common test SSN
+

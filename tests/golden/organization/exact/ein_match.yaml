@@ -1,0 +1,86 @@
+# Golden Test: EIN Exact Match
+# Organizations with matching EIN resolve as same entity
+
+test_id: ORG-EXACT-001-001
+description: Matching EIN produces exact match
+rule_tested: ORG-EXACT-001
+category: golden
+entity_type: organization
+
+input:
+  record_a:
+    source_record_id: "e7f8a9b0-c1d2-3456-0123-567890123456"
+    identifiers:
+      ein: "12-3456789"
+    names:
+      legal_name: "Acme Corporation"
+    jurisdiction:
+      country: "US"
+      state_province: "DE"
+
+  record_b:
+    source_record_id: "f8a9b0c1-d2e3-4567-1234-678901234567"
+    identifiers:
+      ein: "12-3456789"
+    names:
+      legal_name: "ACME CORP"
+    jurisdiction:
+      country: "US"
+      state_province: "DE"
+
+expected:
+  resolution: resolved
+  tier: exact
+  rule_fired: ORG-EXACT-001
+  entity_count: 1
+  conflicts_detected: []
+
+notes: |
+  EIN is authoritative for US organization identity.
+  Name variations (Corporation vs Corp, case differences) do not prevent match.
+
+assertions:
+  - type: tier_equals
+    expected: exact
+  - type: entities_merged
+    expected: true
+---
+test_id: ORG-EXACT-001-002
+description: EIN normalization handles format variations
+rule_tested: ORG-EXACT-001
+category: golden
+entity_type: organization
+
+input:
+  record_a:
+    source_record_id: "a9b0c1d2-e3f4-5678-2345-789012345678"
+    identifiers:
+      ein: "987654321"  # No hyphen
+    names:
+      legal_name: "Beta Industries LLC"
+
+  record_b:
+    source_record_id: "b0c1d2e3-f4a5-6789-3456-890123456789"
+    identifiers:
+      ein: "98-7654321"  # With hyphen
+    names:
+      legal_name: "Beta Industries, L.L.C."
+
+expected:
+  resolution: resolved
+  tier: exact
+  rule_fired: ORG-EXACT-001
+  entity_count: 1
+  conflicts_detected: []
+
+notes: |
+  EIN normalization converts to XX-XXXXXXX format.
+  Legal name normalization handles punctuation and suffix variations.
+
+assertions:
+  - type: tier_equals
+    expected: exact
+  - type: normalization_applied
+    field: identifiers.ein
+    expected: true
+

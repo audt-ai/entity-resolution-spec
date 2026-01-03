@@ -1,0 +1,93 @@
+# Golden Test: PO Box + Locality + Postal Code Strong Match
+# PO Box addresses with matching components produce strong match
+
+test_id: ADDR-STRONG-002-001
+description: Matching PO Box, locality, and postal code produces strong match
+rule_tested: ADDR-STRONG-002
+category: golden
+entity_type: address
+
+input:
+  record_a:
+    source_record_id: "c9d0e1f2-0001-4000-8000-000000000001"
+    address_type: "po_box"
+    po_box:
+      box_number: "1234"
+      box_type: "PO BOX"
+    locality: "Springfield"
+    postal_code:
+      code: "62701"
+
+  record_b:
+    source_record_id: "c9d0e1f2-0001-4000-8000-000000000002"
+    address_type: "po_box"
+    po_box:
+      box_number: "1234"
+      box_type: "PO BOX"
+    locality: "SPRINGFIELD"
+    postal_code:
+      code: "62701"
+
+expected:
+  resolution: resolved
+  tier: strong
+  rule_fired: ADDR-STRONG-002
+  entity_count: 1
+  conflicts_detected: []
+
+notes: |
+  PO Box + locality + postal code provides strong confidence.
+  Locality case normalization handles variation.
+  PO Boxes are distinct addresses even without street components.
+
+assertions:
+  - type: tier_equals
+    expected: strong
+  - type: entities_merged
+    expected: true
+---
+test_id: ADDR-STRONG-002-002
+description: Different PO Box numbers in same postal code does not match
+rule_tested: ADDR-STRONG-002
+category: golden
+entity_type: address
+
+input:
+  record_a:
+    source_record_id: "c9d0e1f2-0001-4000-8000-000000000003"
+    address_type: "po_box"
+    po_box:
+      box_number: "100"
+      box_type: "PO BOX"
+    locality: "Portland"
+    postal_code:
+      code: "97201"
+
+  record_b:
+    source_record_id: "c9d0e1f2-0001-4000-8000-000000000004"
+    address_type: "po_box"
+    po_box:
+      box_number: "200"
+      box_type: "PO BOX"
+    locality: "Portland"
+    postal_code:
+      code: "97201"
+
+expected:
+  resolution: unresolved
+  tier: null
+  rule_fired: null
+  entity_count: 2
+  conflicts_detected: []
+
+notes: |
+  Same post office but different box numbers.
+  Different PO Box numbers are distinct mailing addresses.
+  Rule requires box_number to match.
+
+assertions:
+  - type: tier_equals
+    expected: null
+  - type: entities_merged
+    expected: false
+

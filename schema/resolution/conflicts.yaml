@@ -1,0 +1,348 @@
+# Conflict Handling Schema
+# Defines how conflicting evidence is detected, recorded, and resolved
+
+schema_version: "1.0.0"
+description: |
+  Conflicts occur when evidence supports a match but contradictory information
+  prevents confident resolution. Conflicts are never resolved automatically;
+  they require human review or additional evidence.
+
+# Conflict type definitions
+conflict_types:
+  identifier_mismatch:
+    conflict_type_id: identifier_mismatch
+    description: |
+      High-specificity identifiers that should match do not match,
+      despite other evidence suggesting same entity.
+    severity: high
+    examples:
+      - Same name and DOB, different SSN
+      - Same company name and jurisdiction, different EIN
+    resolution_path: |
+      1. Verify source data accuracy
+      2. Check for data entry errors (transposition, OCR errors)
+      3. Investigate potential identity fraud
+      4. Human decision required
+
+  identifier_attribute_conflict:
+    conflict_type_id: identifier_attribute_conflict
+    description: |
+      A high-specificity identifier matches, but a key attribute differs
+      in a way that suggests different entities.
+    severity: high
+    examples:
+      - Same SSN, different date of birth
+      - Same EIN, different jurisdiction
+      - Same passport number, significantly different name
+    resolution_path: |
+      1. Verify identifier is valid (not a known placeholder or test value)
+      2. Check for identifier reuse (rare but documented)
+      3. Investigate potential data quality issue at source
+      4. Human decision required
+
+  temporal_conflict:
+    conflict_type_id: temporal_conflict
+    description: |
+      Evidence suggests same entity at one point in time but different
+      entities at another point in time.
+    severity: medium
+    examples:
+      - Company name matched, but addresses never overlap temporally
+      - Person at address A in 2020, different person at address A in 2020
+    resolution_path: |
+      1. Review temporal data for both entities
+      2. Determine if legitimate change vs. different entities
+      3. Human review to establish entity timeline
+
+  multiple_candidate_conflict:
+    conflict_type_id: multiple_candidate_conflict
+    description: |
+      A record matches multiple existing entities with equal confidence.
+    severity: medium
+    examples:
+      - New record matches two different existing people with same strength
+      - Trade name matches multiple registered companies
+    resolution_path: |
+      1. Gather additional evidence to differentiate
+      2. Present all candidates to human reviewer
+      3. Human decision required to select correct match or confirm new entity
+
+  circular_resolution_conflict:
+    conflict_type_id: circular_resolution_conflict
+    description: |
+      Resolution logic would create a cycle (A=B, B=C, but A≠C).
+    severity: high
+    examples:
+      - Record A matches B on SSN, B matches C on name+DOB, A and C have different SSN
+    resolution_path: |
+      1. Review all three entities
+      2. Identify which link is incorrect
+      3. Human decision required to break cycle
+
+  threshold_exceeded:
+    conflict_type_id: threshold_exceeded
+    description: |
+      Resolution would merge an unusually large number of records,
+      exceeding configured thresholds.
+    severity: medium
+    examples:
+      - Single entity would contain >100 source records
+      - Merge would combine records from >10 distinct sources
+    resolution_path: |
+      1. Review sample of records in proposed merge
+      2. Verify this isn't a data quality issue at source
+      3. Human approval required for large merges
+
+# Conflict detection rules
+conflict_detection:
+  description: |
+    Conflict indicators are evaluated whenever a match rule fires.
+    If any conflict indicator triggers, the match is marked as ambiguous
+    rather than resolved at the rule's tier.
+
+  evaluation_order:
+    - Check if match rule fires
+    - If match rule fires, evaluate all conflict indicators for that rule
+    - If any conflict indicator triggers, mark as ambiguous
+    - Record both the match and the conflict for review
+
+  global_conflict_indicators:
+    description: |
+      These conflicts are checked regardless of which rule fires.
+      They represent fundamental inconsistencies that prevent resolution.
+
+    indicators:
+      - indicator_id: CONFLICT-GLOBAL-001
+        description: Different SSNs on matched person records
+        entity_type: person
+        condition: |
+          Both records have identifiers.ssn populated
+          AND identifiers.ssn values differ after normalization
+        severity: high
+
+      - indicator_id: CONFLICT-GLOBAL-002
+        description: Different EINs on matched organization records
+        entity_type: organization
+        condition: |
+          Both records have identifiers.ein populated
+          AND identifiers.ein values differ after normalization
+        severity: high
+
+      - indicator_id: CONFLICT-GLOBAL-003
+        description: Significant DOB difference on matched person records
+        entity_type: person
+        condition: |
+          Both records have date_of_birth populated
+          AND dates differ by more than 1 day
+        notes: 1-day tolerance handles timezone/date boundary issues
+        severity: high
+
+      - indicator_id: CONFLICT-GLOBAL-004
+        description: Gender mismatch on matched person records
+        entity_type: person
+        condition: |
+          Both records have gender populated
+          AND gender values differ
+          AND neither value is "unknown"
+        severity: medium
+        notes: May be legitimate (data correction, transition); flags for review
+
+# Conflict record schema
+conflict_record_schema:
+  fields:
+    conflict_id:
+      type: string
+      format: uuid
+      required: true
+      description: Unique identifier for this conflict
+
+    conflict_type:
+      type: string
+      enum:
+        - identifier_mismatch
+        - identifier_attribute_conflict
+        - temporal_conflict
+        - multiple_candidate_conflict
+        - circular_resolution_conflict
+        - threshold_exceeded
+      required: true
+
+    entity_type:
+      type: string
+      enum:
+        - person
+        - organization
+        - address
+      required: true
+
+    involved_entities:
+      type: array
+      items:
+        type: string
+        format: uuid
+      min_items: 2
+      required: true
+      description: Entity IDs involved in the conflict
+
+    involved_source_records:
+      type: array
+      items:
+        type: string
+        format: uuid
+      required: true
+      description: Source record IDs that contributed to the conflict
+
+    triggering_rule:
+      type: string
+      description: Rule ID that produced the match (before conflict was detected)
+
+    conflict_indicator:
+      type: string
+      description: Conflict indicator ID that triggered
+
+    conflicting_fields:
+      type: array
+      items:
+        type: object
+        fields:
+          field_path:
+            type: string
+            description: Path to the conflicting field
+          values:
+            type: array
+            items:
+              type: object
+              fields:
+                entity_id:
+                  type: string
+                  format: uuid
+                value:
+                  type: string
+                source_record_id:
+                  type: string
+                  format: uuid
+      description: The specific fields and values that conflict
+
+    severity:
+      type: string
+      enum:
+        - high
+        - medium
+        - low
+      required: true
+
+    detected_at:
+      type: datetime
+      format: iso8601
+      required: true
+
+    status:
+      type: string
+      enum:
+        - open
+        - under_review
+        - resolved
+        - deferred
+      required: true
+
+    resolution:
+      type: object
+      description: How the conflict was resolved (if resolved)
+      fields:
+        resolution_type:
+          type: string
+          enum:
+            - merge_confirmed  # Human confirmed entities are same
+            - entities_distinct  # Human confirmed entities are different
+            - data_correction  # Source data was corrected
+            - evidence_added  # New evidence resolved ambiguity
+            - deferred_permanently  # Irresolvable; documented as such
+
+        resolved_at:
+          type: datetime
+          format: iso8601
+
+        resolved_by:
+          type: string
+          description: User or system that resolved the conflict
+
+        justification:
+          type: string
+          required: true
+          description: Explanation of resolution decision
+
+        resulting_tier:
+          type: string
+          enum:
+            - exact
+            - strong
+            - weak
+            - unresolved
+          description: Confidence tier after resolution
+
+# Conflict review workflow
+review_workflow:
+  description: |
+    Conflicts are routed to human review queues based on severity
+    and entity type. Resolution requires documented justification.
+
+  queue_assignment:
+    high_severity:
+      description: |
+        High-severity conflicts are prioritized and may require
+        senior analyst review.
+      sla_hours: 24
+      escalation_after_hours: 48
+
+    medium_severity:
+      description: Standard review queue
+      sla_hours: 72
+      escalation_after_hours: 168
+
+    low_severity:
+      description: Batch review acceptable
+      sla_hours: 168
+      escalation_after_hours: null
+
+  required_documentation:
+    - conflict_id
+    - resolution_type
+    - justification (minimum 50 characters)
+    - evidence_reviewed (list of source record IDs examined)
+    - resolved_by (user identifier)
+    - resolved_at (timestamp)
+
+  audit_requirements:
+    - All conflict resolutions are logged
+    - Resolutions cannot be deleted, only superseded
+    - Resolution history is retained indefinitely
+    - Resolutions can be reopened with new justification
+
+# Metrics and monitoring
+metrics:
+  description: |
+    Conflict metrics help identify data quality issues and
+    rule effectiveness. They are not used for performance scoring.
+
+  tracked_metrics:
+    - metric_id: conflict_rate_by_type
+      description: Number of conflicts by type over time
+      purpose: Identify systemic data quality issues
+
+    - metric_id: conflict_rate_by_source
+      description: Number of conflicts by source system
+      purpose: Identify sources with data quality problems
+
+    - metric_id: resolution_time_by_severity
+      description: Time to resolve conflicts by severity
+      purpose: Monitor review queue health
+
+    - metric_id: resolution_outcome_distribution
+      description: Distribution of resolution types
+      purpose: Understand conflict nature (same entity vs. different)
+
+  not_tracked:
+    - resolution_accuracy (no ground truth available)
+    - reviewer_performance (conflicts are case-specific)
+    - throughput_per_reviewer (quality over speed)
+

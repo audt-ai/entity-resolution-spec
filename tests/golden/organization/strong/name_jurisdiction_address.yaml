@@ -1,0 +1,97 @@
+# Golden Test: Name + Jurisdiction + Address Strong Match
+# Multiple corroborating attributes produce strong confidence
+
+test_id: ORG-STRONG-001-001
+description: Matching legal name, jurisdiction, and address produces strong match
+rule_tested: ORG-STRONG-001
+category: golden
+entity_type: organization
+
+input:
+  record_a:
+    source_record_id: "f6a7b8c9-0001-4000-8000-000000000001"
+    names:
+      legal_name: "Pacific Trading Company"
+    jurisdiction:
+      country: "US"
+      state_province: "CA"
+    addresses:
+      - address_entity_id: "addr-pactrade-001"
+        address_type: "registered"
+
+  record_b:
+    source_record_id: "f6a7b8c9-0001-4000-8000-000000000002"
+    names:
+      legal_name: "Pacific Trading Company"
+    jurisdiction:
+      country: "US"
+      state_province: "CA"
+    addresses:
+      - address_entity_id: "addr-pactrade-001"
+        address_type: "headquarters"
+
+expected:
+  resolution: resolved
+  tier: strong
+  rule_fired: ORG-STRONG-001
+  entity_count: 1
+  conflicts_detected: []
+
+notes: |
+  Legal name + jurisdiction + shared address provides strong confidence.
+  Address type (registered vs headquarters) does not affect matching.
+  No registration number or LEI present; cannot reach exact tier.
+
+assertions:
+  - type: tier_equals
+    expected: strong
+  - type: entities_merged
+    expected: true
+---
+test_id: ORG-STRONG-001-002
+description: Same name and jurisdiction with different addresses does not produce strong match
+rule_tested: ORG-STRONG-001
+category: golden
+entity_type: organization
+
+input:
+  record_a:
+    source_record_id: "f6a7b8c9-0001-4000-8000-000000000003"
+    names:
+      legal_name: "Summit Consulting LLC"
+    jurisdiction:
+      country: "US"
+      state_province: "TX"
+    addresses:
+      - address_entity_id: "addr-summit-dallas"
+        address_type: "registered"
+
+  record_b:
+    source_record_id: "f6a7b8c9-0001-4000-8000-000000000004"
+    names:
+      legal_name: "Summit Consulting LLC"
+    jurisdiction:
+      country: "US"
+      state_province: "TX"
+    addresses:
+      - address_entity_id: "addr-summit-houston"
+        address_type: "registered"
+
+expected:
+  resolution: candidate
+  tier: weak
+  rule_fired: ORG-WEAK-001
+  entity_count: 2
+  candidate_cluster: true
+
+notes: |
+  Same name and jurisdiction, but different addresses.
+  Falls back to weak-tier rule (ORG-WEAK-001).
+  Could be same company with multiple locations, or different entities.
+
+assertions:
+  - type: tier_equals
+    expected: weak
+  - type: entities_merged
+    expected: false
+

@@ -1,0 +1,372 @@
+# Confidence Tiers Schema
+# Defines the meaning and operational semantics of resolution confidence tiers
+
+schema_version: "1.0.0"
+description: |
+  Confidence tiers represent the strength of evidence supporting a resolution.
+  Tiers are discrete levels, not scores. They do not automatically escalate.
+  Each tier has defined operational semantics for downstream systems.
+
+# Tier definitions
+tiers:
+  exact:
+    tier_id: exact
+    precedence: 1
+    display_name: Exact Match
+    description: |
+      Resolution based on at least one high-specificity identifier match.
+      Records that match at this tier refer to the same entity with no
+      meaningful ambiguity.
+
+    evidence_basis:
+      - Government-issued identifier match (SSN, passport, national ID)
+      - Registration number match within jurisdiction (EIN, LEI, company number)
+      - Full address match including unit number
+
+    confidence_characteristics:
+      false_positive_rate: |
+        Expected to be near zero under normal data quality conditions.
+        False positives at this tier indicate serious data quality issues
+        (e.g., SSN reuse, data entry errors) and are treated as defects.
+      evidence_type: Direct identifier match
+      human_review_required: false
+
+    operational_semantics:
+      downstream_may:
+        - Use for compliance filings
+        - Use for regulatory reporting
+        - Use in aggregated metrics
+        - Use as basis for case investigations
+        - Rely on for record linkage across systems
+
+      downstream_must_not:
+        - Assume absence of underlying data quality issues
+        - Skip data quality validation in critical paths
+        - Use without maintaining audit trail
+
+      typical_uses:
+        - Tax reporting (same EIN = same entity)
+        - Benefits administration (same SSN = same person)
+        - Corporate registry linkage (same registration number = same company)
+
+    escalation_rules:
+      can_escalate_from: null  # Exact is highest tier
+      can_downgrade_to: strong
+      downgrade_triggers:
+        - New evidence introduces conflict with existing identifier
+        - Identifier determined to be invalid or reused
+
+  strong:
+    tier_id: strong
+    precedence: 2
+    display_name: Strong Match
+    description: |
+      Resolution based on multiple corroborating attributes that, in combination,
+      uniquely identify an entity in the dataset. No conflicting evidence exists.
+
+    evidence_basis:
+      - Full name + date of birth + address
+      - Full name + date of birth + phone number
+      - Full name + date of birth + email address
+      - Legal name + jurisdiction + registered address
+      - Legal name + jurisdiction + formation date
+
+    confidence_characteristics:
+      false_positive_rate: |
+        Low but non-zero. Expected sources of error include twins,
+        common names, family members at same address, and companies
+        with similar names in same jurisdiction.
+      evidence_type: Multiple corroborating attributes
+      human_review_required: false for most workflows; recommended for high-stakes decisions
+
+    operational_semantics:
+      downstream_may:
+        - Use for analytical workflows
+        - Use for alerting and monitoring
+        - Use for case preparation
+        - Include in investigative reports
+        - Use for internal record linkage
+
+      downstream_must_not:
+        - Use as sole basis for legal action without human review
+        - Treat as equivalent to exact match for regulatory purposes
+        - Assume zero false positive risk
+
+      typical_uses:
+        - Know Your Customer (KYC) matching
+        - Watchlist screening (subject to human review)
+        - Investigation lead generation
+        - Customer deduplication
+
+    escalation_rules:
+      can_escalate_from: weak
+      can_escalate_to: exact
+      escalation_requires: New evidence providing high-specificity identifier match
+      can_downgrade_to: weak
+      downgrade_triggers:
+        - New evidence introduces conflict
+        - Attribute determined to be incorrect
+
+  weak:
+    tier_id: weak
+    precedence: 3
+    display_name: Weak Match
+    description: |
+      Partial attribute overlap suggesting potential match, but insufficient
+      evidence for confident resolution. These are candidates for review,
+      not resolved entities.
+
+    evidence_basis:
+      - Name + address (no date of birth)
+      - Name + date of birth (no address corroboration)
+      - Legal name + jurisdiction (no additional corroboration)
+      - Trade name match
+
+    confidence_characteristics:
+      false_positive_rate: |
+        Significant. Weak matches are expected to contain many false positives.
+        They represent hypotheses to investigate, not conclusions.
+      evidence_type: Partial attribute overlap
+      human_review_required: true for any use beyond investigation
+
+    operational_semantics:
+      downstream_may:
+        - Present to analysts as potential matches
+        - Include in review queues for human evaluation
+        - Use for investigation prioritization
+        - Store as candidates for future evidence accumulation
+
+      downstream_must_not:
+        - Treat as resolved entities
+        - Include in compliance filings
+        - Use for automated decisions
+        - Merge without explicit human action
+        - Aggregate for metrics (unless explicitly labeled as "potential")
+
+      typical_uses:
+        - Investigation lead generation (with human review)
+        - Data quality review queues
+        - Potential duplicate identification for manual review
+
+    escalation_rules:
+      can_escalate_from: unresolved
+      can_escalate_to: strong
+      escalation_requires: |
+        New evidence that completes a strong match rule.
+        Accumulation of additional weak matches does NOT escalate to strong.
+      can_downgrade_to: unresolved
+      downgrade_triggers:
+        - New evidence introduces definitive conflict
+        - Attribute determined to be incorrect
+
+  unresolved:
+    tier_id: unresolved
+    precedence: 4
+    display_name: Unresolved
+    description: |
+      No matching rule fires. Records do not share sufficient attributes
+      to suggest a match. This is a valid resolution state, not an error.
+
+    evidence_basis:
+      - Insufficient shared attributes
+      - No matching rule conditions satisfied
+
+    confidence_characteristics:
+      false_positive_rate: Not applicable (no match claimed)
+      evidence_type: None
+      human_review_required: false
+
+    operational_semantics:
+      downstream_may:
+        - Treat records as distinct entities
+        - Process independently
+
+      downstream_must_not:
+        - Assume records definitely refer to different entities
+        - Treat as definitive negative match
+
+    escalation_rules:
+      can_escalate_to: weak
+      escalation_requires: New shared attribute that triggers weak match rule
+
+  ambiguous:
+    tier_id: ambiguous
+    precedence: null  # Not part of confidence hierarchy
+    display_name: Ambiguous
+    description: |
+      Evidence supports a match, but conflicting indicators prevent resolution.
+      This represents uncertainty that requires human review to resolve.
+
+    evidence_basis:
+      - Match rule fires but conflict indicator also triggers
+      - Multiple entities could be the match
+      - Contradictory identifiers present
+
+    confidence_characteristics:
+      false_positive_rate: Not applicable (no resolution claimed)
+      evidence_type: Conflicting evidence
+      human_review_required: true (mandatory)
+
+    operational_semantics:
+      downstream_may:
+        - Route to human review queue
+        - Flag for investigation
+        - Store both potential resolutions as candidates
+
+      downstream_must_not:
+        - Treat as resolved
+        - Select one resolution automatically
+        - Ignore and treat as unresolved
+
+    resolution_path: |
+      Ambiguous cases must be resolved through:
+      1. Additional data gathering to resolve conflict
+      2. Human review and decision with documented justification
+      3. Permanent ambiguity marker if irresolvable
+
+# Tier comparison and transitions
+tier_relationships:
+  confidence_order:
+    description: Ordered from highest to lowest confidence
+    order:
+      - exact
+      - strong
+      - weak
+      - unresolved
+    notes: |
+      Ambiguous is not part of this order because it represents
+      a state requiring resolution, not a confidence level.
+
+  transition_rules:
+    automatic_escalation: false
+    description: |
+      Tiers never automatically escalate. The only way to move from a lower
+      tier to a higher tier is through new evidence that satisfies a higher
+      tier rule. Accumulating weak matches does not produce a strong match.
+
+    valid_transitions:
+      - from: unresolved
+        to: weak
+        mechanism: New evidence triggers weak match rule
+
+      - from: unresolved
+        to: strong
+        mechanism: New evidence triggers strong match rule
+
+      - from: unresolved
+        to: exact
+        mechanism: New evidence triggers exact match rule
+
+      - from: weak
+        to: strong
+        mechanism: New evidence completes strong match rule
+
+      - from: weak
+        to: exact
+        mechanism: New evidence triggers exact match rule
+
+      - from: strong
+        to: exact
+        mechanism: New evidence triggers exact match rule
+
+      - from: exact
+        to: ambiguous
+        mechanism: New conflicting evidence discovered
+
+      - from: strong
+        to: ambiguous
+        mechanism: New conflicting evidence discovered
+
+      - from: any
+        to: lower_tier
+        mechanism: Evidence invalidation (rare)
+
+    invalid_transitions:
+      - from: weak
+        to: strong
+        mechanism: Accumulation of weak matches
+        reason: Multiple weak signals do not constitute strong evidence
+
+# Schema for tier assignment records
+tier_assignment_schema:
+  fields:
+    assignment_id:
+      type: string
+      format: uuid
+      required: true
+      description: Unique identifier for this tier assignment
+
+    entity_pair:
+      type: object
+      required: true
+      fields:
+        entity_a_id:
+          type: string
+          format: uuid
+        entity_b_id:
+          type: string
+          format: uuid
+      description: The pair of entities being compared
+
+    assigned_tier:
+      type: string
+      enum:
+        - exact
+        - strong
+        - weak
+        - unresolved
+        - ambiguous
+      required: true
+
+    rules_evaluated:
+      type: array
+      items:
+        type: object
+        fields:
+          rule_id:
+            type: string
+          fired:
+            type: boolean
+          reason:
+            type: string
+            description: Why rule did/did not fire
+      description: All rules that were evaluated and their results
+
+    rule_that_fired:
+      type: string
+      description: Rule ID that produced this tier (null if unresolved)
+
+    conflicts_detected:
+      type: array
+      items:
+        type: object
+        fields:
+          conflict_type:
+            type: string
+          field_a:
+            type: string
+          field_b:
+            type: string
+          value_a:
+            type: string
+          value_b:
+            type: string
+          description:
+            type: string
+
+    assigned_at:
+      type: datetime
+      format: iso8601
+      required: true
+
+    assigned_by:
+      type: string
+      enum:
+        - system
+        - human_override
+      required: true
+
+    override_justification:
+      type: string
+      description: Required if assigned_by is human_override
+

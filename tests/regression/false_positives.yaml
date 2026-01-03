@@ -1,0 +1,203 @@
+# Regression Tests: False Positives
+# Historical bugs that produced incorrect merges
+
+test_id: REG-2024-001
+description: Transposed SSN digits must not match
+category: regression
+entity_type: person
+
+original_bug:
+  date_discovered: "2024-03-15"
+  description: |
+    Records with SSNs 123-45-6789 and 123-45-6798 were incorrectly merged.
+    The normalization step was stripping hyphens before digit-order validation,
+    causing similar-looking SSNs to match.
+  root_cause: |
+    Digit comparison was performed on normalized strings without
+    verifying exact byte equality.
+  fixed_in: "v1.2.3"
+  fixed_by: "Enforce strict byte equality after normalization"
+
+input:
+  record_a:
+    source_record_id: "f0a1b2c3-d4e5-6789-3456-890123456789"
+    identifiers:
+      ssn: "123-45-6789"
+    name:
+      given_name: "Example"
+      family_name: "Person"
+
+  record_b:
+    source_record_id: "a1b2c3d4-e5f6-7890-4567-901234567890"
+    identifiers:
+      ssn: "123-45-6798"  # Last two digits transposed
+    name:
+      given_name: "Example"
+      family_name: "Person"
+
+expected:
+  resolution: unresolved
+  tier: null
+  must_not_merge: true
+
+rationale: |
+  Transposed digits are a common data entry error.
+  However, they indicate different SSNs and thus different people.
+  The system must require exact match, not fuzzy match.
+
+assertions:
+  - type: entities_merged
+    expected: false
+  - type: exact_match_required
+    expected: true
+---
+test_id: REG-2024-002
+description: Placeholder SSN 999-99-9999 must not match
+category: regression
+entity_type: person
+
+original_bug:
+  date_discovered: "2024-05-22"
+  description: |
+    Multiple records with placeholder SSN 999-99-9999 were merged
+    into a single entity containing thousands of unrelated people.
+  root_cause: |
+    Placeholder detection was not enabled for SSN field.
+  fixed_in: "v1.3.0"
+  fixed_by: "Add 999-99-9999 to placeholder pattern list"
+
+input:
+  record_a:
+    source_record_id: "b2c3d4e5-f6a7-8901-5678-012345678901"
+    identifiers:
+      ssn: "999-99-9999"
+    name:
+      given_name: "Alice"
+      family_name: "Smith"
+    date_of_birth: "1980-01-01"
+
+  record_b:
+    source_record_id: "c3d4e5f6-a7b8-9012-6789-123456789012"
+    identifiers:
+      ssn: "999-99-9999"
+    name:
+      given_name: "Bob"
+      family_name: "Jones"
+    date_of_birth: "1990-12-31"
+
+expected:
+  resolution: unresolved
+  tier: null
+  must_not_merge: true
+  placeholder_detected: true
+
+rationale: |
+  999-99-9999 is a common placeholder for "SSN unknown" or "SSN not provided".
+  It should be treated as null, not as a valid identifier.
+  Records with this SSN should never match on SSN.
+
+assertions:
+  - type: entities_merged
+    expected: false
+  - type: placeholder_detected
+    field: identifiers.ssn
+    expected: true
+---
+test_id: REG-2024-003
+description: Empty string SSN must not match empty string SSN
+category: regression
+entity_type: person
+
+original_bug:
+  date_discovered: "2024-07-10"
+  description: |
+    Records with empty string ("") SSNs were matching each other,
+    creating large clusters of unrelated people.
+  root_cause: |
+    Empty string was passing through normalization unchanged and
+    matching other empty strings in exact comparison.
+  fixed_in: "v1.3.1"
+  fixed_by: "Treat empty strings as null before comparison"
+
+input:
+  record_a:
+    source_record_id: "d4e5f6a7-b8c9-0123-7890-234567890123"
+    identifiers:
+      ssn: ""
+    name:
+      given_name: "Carol"
+      family_name: "Williams"
+
+  record_b:
+    source_record_id: "e5f6a7b8-c9d0-1234-8901-345678901234"
+    identifiers:
+      ssn: ""
+    name:
+      given_name: "Dan"
+      family_name: "Brown"
+
+expected:
+  resolution: unresolved
+  tier: null
+  must_not_merge: true
+
+rationale: |
+  Empty string indicates missing data, not a valid identifier.
+  Two records with missing SSN have no SSN-based relationship.
+
+assertions:
+  - type: entities_merged
+    expected: false
+  - type: field_treated_as_null
+    field: identifiers.ssn
+    expected: true
+---
+test_id: REG-2024-004
+description: Organization name match without jurisdiction must remain weak
+category: regression
+entity_type: organization
+
+original_bug:
+  date_discovered: "2024-08-30"
+  description: |
+    Organizations with the same name in different states were being
+    merged as strong matches. Example: "First National Bank" exists
+    in every state but they are separate legal entities.
+  root_cause: |
+    Jurisdiction was not being checked in strong match rule.
+  fixed_in: "v1.4.0"
+  fixed_by: "Require jurisdiction match for ORG-STRONG rules"
+
+input:
+  record_a:
+    source_record_id: "f6a7b8c9-d0e1-2345-9012-456789012345"
+    names:
+      legal_name: "First National Bank"
+    jurisdiction:
+      country: "US"
+      state_province: "TX"
+
+  record_b:
+    source_record_id: "a7b8c9d0-e1f2-3456-0123-567890123456"
+    names:
+      legal_name: "First National Bank"
+    jurisdiction:
+      country: "US"
+      state_province: "NY"
+
+expected:
+  resolution: unresolved
+  tier: null
+  must_not_merge: true
+
+rationale: |
+  Same organization name in different jurisdictions are different entities.
+  "First National Bank" of Texas is not the same as "First National Bank" of New York.
+  Without EIN or other unique identifier, cannot assume same entity.
+
+assertions:
+  - type: entities_merged
+    expected: false
+  - type: jurisdiction_mismatch_prevents_merge
+    expected: true
+

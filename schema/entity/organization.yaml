@@ -1,0 +1,438 @@
+# Organization Entity Schema
+# Represents a legal or informal organization for identity resolution purposes
+
+schema_version: "1.0.0"
+entity_type: organization
+description: |
+  An organization entity represents a legal entity (corporation, partnership,
+  trust, etc.) or informal organization. Identity is established through
+  registration numbers within jurisdictions or combinations of name,
+  jurisdiction, and address.
+
+fields:
+  # Primary key for this entity within the resolution system
+  entity_id:
+    type: string
+    format: uuid
+    required: true
+    description: System-assigned unique identifier for this entity
+    immutable: true
+
+  # High-specificity identifiers (suitable for exact matching)
+  identifiers:
+    type: object
+    description: Registration numbers and other high-specificity identifiers
+    fields:
+      ein:
+        type: string
+        format: ein
+        description: US Employer Identification Number (XX-XXXXXXX format)
+        validation:
+          pattern: "^[0-9]{2}-[0-9]{7}$"
+
+      lei:
+        type: string
+        format: lei
+        description: Legal Entity Identifier (20 character alphanumeric)
+        validation:
+          pattern: "^[A-Z0-9]{20}$"
+
+      duns:
+        type: string
+        format: duns
+        description: Dun & Bradstreet D-U-N-S Number (9 digits)
+        validation:
+          pattern: "^[0-9]{9}$"
+
+      registration_number:
+        type: string
+        description: Company registration number (format varies by jurisdiction)
+
+      vat_number:
+        type: string
+        description: VAT registration number (format varies by country)
+
+      tax_id:
+        type: string
+        description: Tax identification number (non-US jurisdictions)
+
+      swift_bic:
+        type: string
+        description: SWIFT/BIC code for financial institutions
+        validation:
+          pattern: "^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$"
+
+      cik:
+        type: string
+        description: SEC Central Index Key (for US public companies)
+        validation:
+          pattern: "^[0-9]{10}$"
+
+  # Jurisdiction of incorporation/registration
+  jurisdiction:
+    type: object
+    description: Jurisdiction where the organization is registered
+    fields:
+      country:
+        type: string
+        format: iso3166_alpha2
+        description: Country of registration (ISO 3166-1 alpha-2)
+
+      state_province:
+        type: string
+        description: State or province of registration (if applicable)
+
+      registration_authority:
+        type: string
+        description: Name of the registration authority
+
+  # Organization names
+  names:
+    type: object
+    description: Legal name and trade names
+    fields:
+      legal_name:
+        type: string
+        max_length: 500
+        description: Official registered legal name
+
+      legal_name_local:
+        type: string
+        max_length: 500
+        description: Legal name in local language/script if different
+
+      trade_names:
+        type: array
+        items:
+          type: object
+          fields:
+            name:
+              type: string
+              max_length: 500
+            effective_from:
+              type: date
+            effective_to:
+              type: date
+        description: Trade names / doing business as (DBA) names
+
+      former_names:
+        type: array
+        items:
+          type: object
+          fields:
+            name:
+              type: string
+              max_length: 500
+            effective_from:
+              type: date
+            effective_to:
+              type: date
+            change_reason:
+              type: string
+              enum:
+                - merger
+                - acquisition
+                - rebranding
+                - legal_requirement
+                - unknown
+        description: Previous legal names
+
+  # Organization type and status
+  organization_type:
+    type: string
+    enum:
+      - corporation
+      - llc
+      - partnership
+      - limited_partnership
+      - sole_proprietorship
+      - trust
+      - nonprofit
+      - government_entity
+      - association
+      - cooperative
+      - joint_venture
+      - branch
+      - subsidiary
+      - unknown
+    description: Legal structure of the organization
+
+  status:
+    type: string
+    enum:
+      - active
+      - inactive
+      - dissolved
+      - merged
+      - acquired
+      - suspended
+      - unknown
+    description: Current operational status
+
+  # Important dates
+  formation_date:
+    type: date
+    format: iso8601_date
+    description: Date of incorporation or formation
+
+  dissolution_date:
+    type: date
+    format: iso8601_date
+    description: Date of dissolution if applicable
+
+  fiscal_year_end:
+    type: string
+    description: Fiscal year end (MM-DD format)
+    validation:
+      pattern: "^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$"
+
+  # Address associations (references to address entities)
+  addresses:
+    type: array
+    items:
+      type: object
+      fields:
+        address_entity_id:
+          type: string
+          format: uuid
+          description: Reference to an address entity
+        address_type:
+          type: string
+          enum:
+            - registered
+            - headquarters
+            - mailing
+            - branch
+            - previous
+            - unknown
+        effective_from:
+          type: date
+        effective_to:
+          type: date
+    description: Historical and current address associations
+
+  # Contact information
+  contact:
+    type: object
+    description: Contact information for the organization
+    fields:
+      phones:
+        type: array
+        items:
+          type: object
+          fields:
+            number:
+              type: string
+              format: e164
+            type:
+              type: string
+              enum:
+                - main
+                - fax
+                - toll_free
+                - unknown
+            effective_from:
+              type: date
+            effective_to:
+              type: date
+
+      emails:
+        type: array
+        items:
+          type: object
+          fields:
+            address:
+              type: string
+              format: email
+            type:
+              type: string
+              enum:
+                - general
+                - investor_relations
+                - compliance
+                - legal
+                - unknown
+            effective_from:
+              type: date
+            effective_to:
+              type: date
+
+      websites:
+        type: array
+        items:
+          type: object
+          fields:
+            url:
+              type: string
+              format: url
+            effective_from:
+              type: date
+            effective_to:
+              type: date
+
+  # Registered agent (for legal service of process)
+  registered_agent:
+    type: object
+    description: Registered agent for service of process
+    fields:
+      agent_type:
+        type: string
+        enum:
+          - individual
+          - organization
+      person_entity_id:
+        type: string
+        format: uuid
+        description: Reference to person entity if agent is an individual
+      organization_entity_id:
+        type: string
+        format: uuid
+        description: Reference to organization entity if agent is an organization
+      address_entity_id:
+        type: string
+        format: uuid
+        description: Reference to agent's address
+      effective_from:
+        type: date
+      effective_to:
+        type: date
+
+  # Relationships to people (officers, directors, owners)
+  related_persons:
+    type: array
+    items:
+      type: object
+      fields:
+        person_entity_id:
+          type: string
+          format: uuid
+          description: Reference to a person entity
+        relationship_type:
+          type: string
+          enum:
+            - officer
+            - director
+            - owner
+            - beneficial_owner
+            - shareholder
+            - partner
+            - trustee
+            - authorized_signatory
+            - unknown
+        title:
+          type: string
+          description: Specific title (CEO, President, Secretary, etc.)
+        effective_from:
+          type: date
+        effective_to:
+          type: date
+    description: People associated with the organization
+
+  # Parent/subsidiary relationships
+  related_organizations:
+    type: array
+    items:
+      type: object
+      fields:
+        organization_entity_id:
+          type: string
+          format: uuid
+          description: Reference to another organization entity
+        relationship_type:
+          type: string
+          enum:
+            - parent
+            - subsidiary
+            - affiliate
+            - branch
+            - predecessor
+            - successor
+            - joint_venture_partner
+        ownership_percentage:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Ownership percentage if applicable
+        effective_from:
+          type: date
+        effective_to:
+          type: date
+    description: Relationships to other organizations
+
+  # Metadata
+  metadata:
+    type: object
+    description: System metadata for the entity
+    fields:
+      created_at:
+        type: datetime
+        format: iso8601
+        required: true
+        immutable: true
+
+      updated_at:
+        type: datetime
+        format: iso8601
+        required: true
+
+      version:
+        type: integer
+        minimum: 1
+        required: true
+
+      source_record_ids:
+        type: array
+        items:
+          type: string
+          format: uuid
+        required: true
+
+# Validation rules
+validation:
+  rules:
+    - id: org_val_001
+      description: Dissolution date must be after formation date
+      condition: |
+        if dissolution_date is not null and formation_date is not null:
+          dissolution_date > formation_date
+
+    - id: org_val_002
+      description: Registration number requires jurisdiction
+      condition: |
+        if identifiers.registration_number is not null:
+          jurisdiction.country is not null
+
+    - id: org_val_003
+      description: EIN requires US jurisdiction
+      condition: |
+        if identifiers.ein is not null:
+          jurisdiction.country == "US"
+
+    - id: org_val_004
+      description: Registered agent must have at least one identifier
+      condition: |
+        if registered_agent is not null:
+          registered_agent.person_entity_id is not null or
+          registered_agent.organization_entity_id is not null
+
+# Fields used for matching at each tier
+matching:
+  exact_match_fields:
+    - identifiers.ein
+    - identifiers.lei
+    - identifiers.duns
+    - identifiers.registration_number + jurisdiction.country + jurisdiction.state_province
+
+  strong_match_fields:
+    - names.legal_name + jurisdiction.country + addresses
+    - names.legal_name + jurisdiction.country + formation_date
+
+  weak_match_fields:
+    - names.legal_name + jurisdiction.country
+    - names.trade_names
+
+# Fields that indicate conflict
+conflict_indicators:
+  - jurisdiction.country  # If identifiers match but jurisdiction differs
+  - formation_date  # If name/jurisdiction match but formation date differs significantly
+

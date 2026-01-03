@@ -1,0 +1,452 @@
+# Address Entity Schema
+# Represents a physical or mailing address for identity resolution purposes
+
+schema_version: "1.0.0"
+entity_type: address
+description: |
+  An address entity represents a physical location or mailing address.
+  Addresses are first-class entities because they are shared across people
+  and organizations, change over time, and require careful normalization
+  to match correctly without over-merging.
+
+fields:
+  # Primary key for this entity within the resolution system
+  entity_id:
+    type: string
+    format: uuid
+    required: true
+    description: System-assigned unique identifier for this address entity
+    immutable: true
+
+  # Address type classification
+  address_type:
+    type: string
+    enum:
+      - street  # Standard street address
+      - po_box  # Post office box
+      - rural_route  # Rural route delivery
+      - military  # Military address (APO/FPO/DPO)
+      - general_delivery  # General delivery / poste restante
+      - commercial_mail_receiving  # CMRA (e.g., UPS Store mailbox)
+      - unknown
+    description: Classification of address type
+
+  # Street address components (for street type addresses)
+  street:
+    type: object
+    description: Street address components
+    fields:
+      house_number:
+        type: string
+        max_length: 20
+        description: Building/house number
+
+      house_number_suffix:
+        type: string
+        max_length: 10
+        description: House number suffix (A, B, 1/2, etc.)
+
+      pre_directional:
+        type: string
+        enum:
+          - N
+          - S
+          - E
+          - W
+          - NE
+          - NW
+          - SE
+          - SW
+        description: Directional prefix (North, South, etc.)
+
+      street_name:
+        type: string
+        max_length: 200
+        description: Street name without type or directional
+
+      street_type:
+        type: string
+        max_length: 20
+        description: Street type (Street, Avenue, Road, etc.) - normalized form
+
+      post_directional:
+        type: string
+        enum:
+          - N
+          - S
+          - E
+          - W
+          - NE
+          - NW
+          - SE
+          - SW
+        description: Directional suffix
+
+      # Raw/original street line for reference
+      raw_street_line:
+        type: string
+        max_length: 500
+        description: Original unparsed street line from source
+
+  # Secondary unit (apartment, suite, etc.)
+  unit:
+    type: object
+    description: Secondary address unit
+    fields:
+      unit_type:
+        type: string
+        enum:
+          - APT  # Apartment
+          - STE  # Suite
+          - UNIT  # Unit
+          - FL  # Floor
+          - RM  # Room
+          - BLDG  # Building
+          - DEPT  # Department
+          - SPC  # Space
+          - LOT  # Lot
+          - TRLR  # Trailer
+          - PMB  # Private mailbox
+          - "#"  # Number/pound sign
+          - unknown
+        description: Type of secondary unit
+
+      unit_number:
+        type: string
+        max_length: 20
+        description: Unit number or identifier
+
+  # PO Box components (for po_box type addresses)
+  po_box:
+    type: object
+    description: Post office box components
+    fields:
+      box_number:
+        type: string
+        max_length: 20
+        description: PO Box number
+
+      box_type:
+        type: string
+        enum:
+          - PO BOX
+          - DRAWER
+          - BIN
+          - CALLER
+        description: Type of post office box
+
+  # Rural route components (for rural_route type addresses)
+  rural_route:
+    type: object
+    description: Rural route components
+    fields:
+      route_number:
+        type: string
+        max_length: 10
+        description: Rural route number
+
+      box_number:
+        type: string
+        max_length: 20
+        description: Box number on the route
+
+  # Military address components (for military type addresses)
+  military:
+    type: object
+    description: Military address components
+    fields:
+      unit_designation:
+        type: string
+        max_length: 100
+        description: Military unit designation
+
+      box_number:
+        type: string
+        max_length: 20
+        description: Box number
+
+      apo_fpo_dpo:
+        type: string
+        enum:
+          - APO  # Army/Air Force Post Office
+          - FPO  # Fleet Post Office
+          - DPO  # Diplomatic Post Office
+        description: Military post office type
+
+  # Locality (city/town)
+  locality:
+    type: string
+    max_length: 100
+    description: City, town, village, or municipality name
+
+  # Administrative region (state/province)
+  region:
+    type: object
+    description: Administrative region
+    fields:
+      name:
+        type: string
+        max_length: 100
+        description: Full region name
+
+      code:
+        type: string
+        max_length: 10
+        description: Region code (e.g., state abbreviation)
+
+      type:
+        type: string
+        enum:
+          - state
+          - province
+          - territory
+          - county
+          - district
+          - region
+          - department
+          - unknown
+        description: Type of administrative region
+
+  # Postal code
+  postal_code:
+    type: object
+    description: Postal/ZIP code
+    fields:
+      code:
+        type: string
+        max_length: 20
+        description: Primary postal code
+
+      extension:
+        type: string
+        max_length: 10
+        description: Postal code extension (e.g., ZIP+4)
+
+  # Country
+  country:
+    type: object
+    description: Country information
+    fields:
+      code:
+        type: string
+        format: iso3166_alpha2
+        description: ISO 3166-1 alpha-2 country code
+
+      name:
+        type: string
+        max_length: 100
+        description: Country name
+
+  # Additional address metadata
+  care_of:
+    type: string
+    max_length: 200
+    description: Care-of or attention line (not part of the address itself)
+
+  building_name:
+    type: string
+    max_length: 200
+    description: Building name (if used instead of or in addition to number)
+
+  # Geocoding (if available from source data)
+  geocode:
+    type: object
+    description: Geographic coordinates (if available)
+    fields:
+      latitude:
+        type: number
+        minimum: -90
+        maximum: 90
+
+      longitude:
+        type: number
+        minimum: -180
+        maximum: 180
+
+      precision:
+        type: string
+        enum:
+          - rooftop  # Exact building location
+          - parcel  # Property parcel centroid
+          - street  # Street-level interpolation
+          - postal_code  # Postal code centroid
+          - locality  # City/town centroid
+          - approximate  # General area
+          - unknown
+
+      source:
+        type: string
+        description: Source of geocoding data
+
+  # Address validity period
+  effective_from:
+    type: date
+    format: iso8601_date
+    description: When this address became valid (if known)
+
+  effective_to:
+    type: date
+    format: iso8601_date
+    description: When this address ceased to be valid (if known)
+
+  # Validation status
+  validation_status:
+    type: object
+    description: Results of address validation if performed
+    fields:
+      status:
+        type: string
+        enum:
+          - validated  # Confirmed by postal authority
+          - corrected  # Corrected by validation service
+          - unvalidated  # Not validated
+          - invalid  # Failed validation
+          - partial  # Partially validated
+
+      validated_at:
+        type: datetime
+        format: iso8601
+
+      validation_source:
+        type: string
+        description: Service used for validation
+
+      original_components:
+        type: object
+        description: Original values before any correction (for lineage)
+
+  # Raw/original address for reference
+  raw_address:
+    type: object
+    description: Original address as received from source
+    fields:
+      full_address:
+        type: string
+        max_length: 1000
+        description: Complete original address string
+
+      address_lines:
+        type: array
+        items:
+          type: string
+          max_length: 200
+        description: Original address lines if provided separately
+
+  # Metadata
+  metadata:
+    type: object
+    description: System metadata
+    fields:
+      created_at:
+        type: datetime
+        format: iso8601
+        required: true
+        immutable: true
+
+      updated_at:
+        type: datetime
+        format: iso8601
+        required: true
+
+      version:
+        type: integer
+        minimum: 1
+        required: true
+
+      source_record_ids:
+        type: array
+        items:
+          type: string
+          format: uuid
+        required: true
+
+# Validation rules
+validation:
+  rules:
+    - id: addr_val_001
+      description: Street address requires locality or postal code
+      condition: |
+        if address_type == "street":
+          locality is not null or postal_code.code is not null
+
+    - id: addr_val_002
+      description: PO Box requires box number
+      condition: |
+        if address_type == "po_box":
+          po_box.box_number is not null
+
+    - id: addr_val_003
+      description: Rural route requires route number
+      condition: |
+        if address_type == "rural_route":
+          rural_route.route_number is not null
+
+    - id: addr_val_004
+      description: Military address requires APO/FPO/DPO
+      condition: |
+        if address_type == "military":
+          military.apo_fpo_dpo is not null
+
+    - id: addr_val_005
+      description: effective_to must be after effective_from
+      condition: |
+        if effective_to is not null and effective_from is not null:
+          effective_to > effective_from
+
+    - id: addr_val_006
+      description: Geocode requires both latitude and longitude
+      condition: |
+        if geocode is not null:
+          (geocode.latitude is not null) == (geocode.longitude is not null)
+
+# Fields used for matching at each tier
+matching:
+  exact_match_fields:
+    - street + unit + locality + region + postal_code + country
+
+  strong_match_fields:
+    - street + locality + postal_code
+    - street + unit + postal_code
+    - po_box + locality + postal_code
+
+  weak_match_fields:
+    - street + locality
+    - postal_code + unit
+
+# Normalization notes
+normalization:
+  description: |
+    Address normalization is critical for matching. The following normalizations
+    are applied during ingestion. Original values are preserved in raw_address.
+
+  steps:
+    - step: case_normalization
+      description: Convert all text to uppercase
+
+    - step: abbreviation_standardization
+      description: |
+        Standardize common abbreviations:
+        - Street types (ST -> STREET, AVE -> AVENUE, etc.)
+        - Directionals (N -> NORTH, NW -> NORTHWEST, etc.)
+        - Unit types (APT -> APT, # -> UNIT, etc.)
+        - States (CALIFORNIA -> CA, etc.)
+
+    - step: punctuation_removal
+      description: |
+        Remove punctuation except where semantically significant.
+        Periods, commas, and hyphens are removed from most contexts.
+
+    - step: whitespace_normalization
+      description: Collapse multiple spaces to single space, trim edges
+
+    - step: component_parsing
+      description: |
+        Parse address into structured components. Parsing failures
+        preserve the original string in raw_address.
+
+  known_limitations:
+    - International addresses have variable formats; normalization is best-effort
+    - Building names may not parse correctly into components
+    - Addresses with non-standard formatting may produce unexpected parses
+    - Multi-line addresses may lose line break semantics
+

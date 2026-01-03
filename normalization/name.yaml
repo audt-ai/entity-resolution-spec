@@ -1,0 +1,429 @@
+# Name Normalization Specification
+# Defines standardization rules for person and organization names
+
+schema_version: "1.0.0"
+description: |
+  Name normalization standardizes names for comparison while preserving
+  original values. Names are inherently complex due to cultural variation,
+  nicknames, transliteration, and data entry inconsistencies.
+
+# General principles
+principles:
+  - Names are culturally sensitive; avoid Western-centric assumptions
+  - Preserve original names; normalize copies for comparison
+  - Do not infer missing components
+  - Do not auto-correct misspellings (except documented common cases)
+  - Transliteration is lossy; preserve original script where possible
+
+# =============================================================================
+# PERSON NAME NORMALIZATION
+# =============================================================================
+
+person_name:
+  description: |
+    Normalization rules for natural person names.
+    Applied to name.given_name, name.family_name, name.middle_names.
+
+  # Case normalization
+  case_normalization:
+    rule_id: NAME-PERSON-CASE
+    description: Normalize to title case for display, uppercase for comparison
+    comparison_form: uppercase
+    display_form: title_case
+    examples:
+      - input: "john"
+        comparison: "JOHN"
+        display: "John"
+      - input: "MARY JANE"
+        comparison: "MARY JANE"
+        display: "Mary Jane"
+      - input: "McDonald"
+        comparison: "MCDONALD"
+        display: "Mcdonald"  # Limitation: loses internal caps
+    notes: |
+      Internal capitalization (McDonald, O'Brien) is lost in normalization.
+      Original is preserved for display.
+
+  # Whitespace normalization
+  whitespace_normalization:
+    rule_id: NAME-PERSON-WHITESPACE
+    description: Normalize whitespace
+    transformations:
+      - Trim leading and trailing whitespace
+      - Collapse multiple spaces to single space
+      - Remove tabs and newlines
+    examples:
+      - input: "  John   Smith  "
+        output: "JOHN SMITH"
+
+  # Punctuation handling
+  punctuation_normalization:
+    rule_id: NAME-PERSON-PUNCTUATION
+    description: Handle punctuation in names
+    remove:
+      - periods (.)
+      - commas (,)
+      - quotation marks (" ')
+    preserve:
+      - hyphens in compound names (hyphen becomes space)
+      - apostrophes (removed)
+    examples:
+      - input: "O'Brien"
+        output: "OBRIEN"
+      - input: "Smith-Jones"
+        output: "SMITH JONES"
+      - input: "John, Jr."
+        output: "JOHN JR"
+    notes: |
+      Hyphens are converted to spaces to support matching
+      "Smith-Jones" with "Smith Jones".
+
+  # Suffix handling
+  suffix_normalization:
+    rule_id: NAME-PERSON-SUFFIX
+    description: Standardize name suffixes
+    extract_to_field: name.suffix
+    standard_forms:
+      "JUNIOR": "JR"
+      "JR.": "JR"
+      "JR": "JR"
+      "SENIOR": "SR"
+      "SR.": "SR"
+      "SR": "SR"
+      "II": "II"
+      "III": "III"
+      "IV": "IV"
+      "V": "V"
+      "SECOND": "II"
+      "THIRD": "III"
+      "FOURTH": "IV"
+      "FIFTH": "V"
+      "ESQ": "ESQ"
+      "ESQ.": "ESQ"
+      "ESQUIRE": "ESQ"
+      "PHD": "PHD"
+      "PH.D.": "PHD"
+      "PH.D": "PHD"
+      "MD": "MD"
+      "M.D.": "MD"
+      "M.D": "MD"
+      "JD": "JD"
+      "J.D.": "JD"
+    examples:
+      - input: "John Smith Jr."
+        given_name: "JOHN"
+        family_name: "SMITH"
+        suffix: "JR"
+
+  # Prefix handling
+  prefix_normalization:
+    rule_id: NAME-PERSON-PREFIX
+    description: Handle name prefixes/titles
+    extract_to_field: name.prefix
+    recognized_prefixes:
+      - MR
+      - MRS
+      - MS
+      - MISS
+      - DR
+      - PROF
+      - REV
+      - HON
+    handling: |
+      Prefixes are extracted but not used for matching.
+      They are informational only.
+    examples:
+      - input: "Dr. John Smith"
+        prefix: "DR"
+        given_name: "JOHN"
+        family_name: "SMITH"
+
+  # Common nickname mappings
+  nickname_expansion:
+    rule_id: NAME-PERSON-NICKNAME
+    description: Map common nicknames to formal names for comparison
+    handling: |
+      Nicknames are expanded to canonical forms for comparison only.
+      Original nickname is preserved in source.
+      Matching uses both original and expanded forms.
+    mappings:
+      BILL: WILLIAM
+      BILLY: WILLIAM
+      WILL: WILLIAM
+      BOB: ROBERT
+      BOBBY: ROBERT
+      ROB: ROBERT
+      DICK: RICHARD
+      RICK: RICHARD
+      RICH: RICHARD
+      JIM: JAMES
+      JIMMY: JAMES
+      MIKE: MICHAEL
+      MICK: MICHAEL
+      STEVE: STEVEN
+      STEVEN: STEPHEN  # Bidirectional
+      STEPHEN: STEVEN
+      TOM: THOMAS
+      TOMMY: THOMAS
+      DAVE: DAVID
+      DAN: DANIEL
+      DANNY: DANIEL
+      JOE: JOSEPH
+      JOEY: JOSEPH
+      JACK: JOHN
+      JOHNNY: JOHN
+      CHRIS: CHRISTOPHER
+      MATT: MATTHEW
+      NICK: NICHOLAS
+      TONY: ANTHONY
+      ALEX: ALEXANDER
+      ANDY: ANDREW
+      DREW: ANDREW
+      BEN: BENJAMIN
+      ED: EDWARD
+      TED: EDWARD
+      TEDDY: EDWARD
+      FRANK: FRANCIS
+      FRED: FREDERICK
+      GREG: GREGORY
+      HARRY: HAROLD
+      LARRY: LAWRENCE
+      # Female names
+      LIZ: ELIZABETH
+      LIZZY: ELIZABETH
+      BETH: ELIZABETH
+      BETTY: ELIZABETH
+      SUE: SUSAN
+      SUZY: SUSAN
+      KATE: KATHERINE
+      KATIE: KATHERINE
+      KATHY: KATHERINE
+      CATHY: CATHERINE
+      JENNY: JENNIFER
+      JEN: JENNIFER
+      BECKY: REBECCA
+      MAGGIE: MARGARET
+      PEGGY: MARGARET
+      PAT: PATRICIA
+      PATTY: PATRICIA
+      SAM: SAMANTHA  # Or Samuel - context dependent
+      MANDY: AMANDA
+      ABBY: ABIGAIL
+      VICKY: VICTORIA
+      TINA: CHRISTINA
+    notes: |
+      Nickname expansion is one-directional for matching.
+      Both "BILL" and "WILLIAM" will match "WILLIAM".
+      Some nicknames are ambiguous (e.g., SAM can be Samuel or Samantha).
+
+  # Initial handling
+  initial_handling:
+    rule_id: NAME-PERSON-INITIAL
+    description: Handle single-letter initials
+    rules:
+      - "Single letters are treated as initials"
+      - "Initials match any name starting with that letter"
+      - "'J.' matches 'JOHN', 'JAMES', etc."
+    examples:
+      - input: "J. Smith"
+        given_name: "J"
+        given_name_is_initial: true
+    notes: |
+      Initial matching is handled in resolution rules, not normalization.
+      Normalization just identifies that a value is an initial.
+
+# =============================================================================
+# ORGANIZATION NAME NORMALIZATION
+# =============================================================================
+
+organization_name:
+  description: |
+    Normalization rules for organization names.
+    Applied to names.legal_name, names.trade_names.
+
+  # Case normalization
+  case_normalization:
+    rule_id: NAME-ORG-CASE
+    description: Normalize to uppercase for comparison
+    comparison_form: uppercase
+    examples:
+      - input: "Acme Corporation"
+        output: "ACME CORPORATION"
+
+  # Whitespace normalization
+  whitespace_normalization:
+    rule_id: NAME-ORG-WHITESPACE
+    description: Normalize whitespace
+    transformations:
+      - Trim leading and trailing whitespace
+      - Collapse multiple spaces to single space
+      - Remove tabs and newlines
+
+  # Punctuation handling
+  punctuation_normalization:
+    rule_id: NAME-ORG-PUNCTUATION
+    description: Handle punctuation in organization names
+    remove:
+      - periods (.)
+      - commas (,)
+      - apostrophes (')
+      - quotation marks (" ')
+    preserve:
+      - ampersand (&) - normalized to "AND"
+      - hyphens (converted to space)
+    examples:
+      - input: "Smith & Jones, Inc."
+        output: "SMITH AND JONES INC"
+      - input: "O'Reilly Media"
+        output: "OREILLY MEDIA"
+
+  # Legal suffix extraction
+  legal_suffix_extraction:
+    rule_id: NAME-ORG-SUFFIX
+    description: Extract and standardize legal entity suffixes
+    extract_to_field: legal_suffix
+    suffixes:
+      # Corporation types
+      "CORPORATION": "CORP"
+      "CORP.": "CORP"
+      "CORP": "CORP"
+      "INCORPORATED": "INC"
+      "INC.": "INC"
+      "INC": "INC"
+      # Limited Liability
+      "LIMITED LIABILITY COMPANY": "LLC"
+      "LIMITED LIABILITY CO": "LLC"
+      "L.L.C.": "LLC"
+      "LLC": "LLC"
+      "LIMITED": "LTD"
+      "LTD.": "LTD"
+      "LTD": "LTD"
+      # Partnership
+      "LIMITED PARTNERSHIP": "LP"
+      "L.P.": "LP"
+      "LP": "LP"
+      "LIMITED LIABILITY PARTNERSHIP": "LLP"
+      "L.L.P.": "LLP"
+      "LLP": "LLP"
+      "GENERAL PARTNERSHIP": "GP"
+      # Professional
+      "PROFESSIONAL CORPORATION": "PC"
+      "P.C.": "PC"
+      "PC": "PC"
+      "PROFESSIONAL ASSOCIATION": "PA"
+      "P.A.": "PA"
+      "PROFESSIONAL LIMITED LIABILITY COMPANY": "PLLC"
+      # Other
+      "COMPANY": "CO"
+      "CO.": "CO"
+      "CO": "CO"
+      "TRUST": "TRUST"
+      "FOUNDATION": "FOUNDATION"
+      "ASSOCIATION": "ASSN"
+      "ASSN.": "ASSN"
+    comparison_handling: |
+      For comparison, legal suffixes are extracted and compared separately.
+      "ACME INC" and "ACME CORPORATION" should match on name "ACME"
+      with different legal suffixes noted.
+    examples:
+      - input: "Acme Corporation"
+        name: "ACME"
+        legal_suffix: "CORP"
+      - input: "Smith & Jones, L.L.C."
+        name: "SMITH AND JONES"
+        legal_suffix: "LLC"
+
+  # Common word removal (optional for matching)
+  noise_words:
+    rule_id: NAME-ORG-NOISE
+    description: |
+      Words that may be removed for fuzzy matching.
+      These are NOT removed by default; removal is optional and documented.
+    words:
+      - THE
+      - A
+      - AN
+      - OF
+      - AND
+      - FOR
+    handling: |
+      Noise word removal is NOT automatic.
+      It may be applied for specific matching scenarios with documentation.
+      Original name always preserved.
+
+  # "The" prefix handling
+  the_prefix:
+    rule_id: NAME-ORG-THE
+    description: Handle "The" prefix
+    handling: |
+      "THE" at the start of an organization name is preserved but
+      may be ignored for matching purposes.
+    examples:
+      - input: "The Boeing Company"
+        output: "THE BOEING COMPANY"
+        match_form: "BOEING COMPANY"  # Alternative for matching
+
+# =============================================================================
+# KNOWN LIMITATIONS
+# =============================================================================
+
+known_limitations:
+  - limitation: Cultural name ordering
+    description: |
+      Some cultures put family name first (e.g., Chinese, Korean, Japanese).
+      The schema assumes given-name-first ordering.
+    mitigation: |
+      Source systems should provide names in given-family order.
+      If not possible, document the ordering convention per source.
+
+  - limitation: Multi-part family names
+    description: |
+      Some names have multi-part family names (e.g., "van der Berg", "de la Cruz").
+      These may be split incorrectly.
+    mitigation: |
+      Store complete family name as provided.
+      Do not attempt to identify particles.
+
+  - limitation: Mononyms
+    description: |
+      Some individuals have only one name (e.g., "Madonna", "Prince").
+    mitigation: |
+      Store in family_name field; given_name may be null.
+
+  - limitation: Transliteration
+    description: |
+      Names transliterated from non-Latin scripts may have multiple
+      valid spellings (e.g., "Muhammad", "Mohammed", "Mohamed").
+    mitigation: |
+      No automatic transliteration correction.
+      Store as received; matching is best-effort.
+
+  - limitation: Identical names
+    description: |
+      Common names (e.g., "John Smith") match many individuals.
+    mitigation: |
+      Name matching alone produces weak matches.
+      Strong matches require additional attributes.
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+
+validation:
+  - rule: name_length
+    description: Names should not exceed reasonable length
+    max_length: 100
+    severity: warning
+
+  - rule: name_not_placeholder
+    description: Detect placeholder values
+    patterns:
+      - "^N/?A$"
+      - "^UNKNOWN$"
+      - "^NONE$"
+      - "^NULL$"
+      - "^TEST"
+      - "^XXX+$"
+    action: treat_as_null
+    severity: info
+

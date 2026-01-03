@@ -1,0 +1,97 @@
+# Golden Test: Name + DOB + Email Strong Match
+# Multiple corroborating attributes produce strong confidence
+
+test_id: PERSON-STRONG-003-001
+description: Matching name, date of birth, and email produces strong match
+rule_tested: PERSON-STRONG-003
+category: golden
+entity_type: person
+
+input:
+  record_a:
+    source_record_id: "e5f6a7b8-0001-4000-8000-000000000001"
+    name:
+      given_name: "David"
+      family_name: "Kim"
+    date_of_birth: "1988-07-15"
+    contact:
+      emails:
+        - address: "david.kim@example.org"
+          type: "personal"
+
+  record_b:
+    source_record_id: "e5f6a7b8-0001-4000-8000-000000000002"
+    name:
+      given_name: "David"
+      family_name: "Kim"
+    date_of_birth: "1988-07-15"
+    contact:
+      emails:
+        - address: "david.kim@example.org"
+          type: "work"
+
+expected:
+  resolution: resolved
+  tier: strong
+  rule_fired: PERSON-STRONG-003
+  entity_count: 1
+  conflicts_detected: []
+
+notes: |
+  Name + DOB + email combination provides strong confidence.
+  Email type (personal vs work) does not affect matching.
+  Email is normalized to lowercase before comparison.
+
+assertions:
+  - type: tier_equals
+    expected: strong
+  - type: entities_merged
+    expected: true
+---
+test_id: PERSON-STRONG-003-002
+description: Same name and DOB with different emails does not produce strong match
+rule_tested: PERSON-STRONG-003
+category: golden
+entity_type: person
+
+input:
+  record_a:
+    source_record_id: "e5f6a7b8-0001-4000-8000-000000000003"
+    name:
+      given_name: "Emily"
+      family_name: "Brown"
+    date_of_birth: "1995-02-28"
+    contact:
+      emails:
+        - address: "emily.brown@company.com"
+          type: "work"
+
+  record_b:
+    source_record_id: "e5f6a7b8-0001-4000-8000-000000000004"
+    name:
+      given_name: "Emily"
+      family_name: "Brown"
+    date_of_birth: "1995-02-28"
+    contact:
+      emails:
+        - address: "ebrown@different.com"
+          type: "personal"
+
+expected:
+  resolution: candidate
+  tier: weak
+  rule_fired: PERSON-WEAK-002
+  entity_count: 2
+  candidate_cluster: true
+
+notes: |
+  Name + DOB matches, but email addresses differ.
+  Falls back to weak-tier rule (PERSON-WEAK-002).
+  May be same person with multiple emails, but requires review.
+
+assertions:
+  - type: tier_equals
+    expected: weak
+  - type: entities_merged
+    expected: false
+

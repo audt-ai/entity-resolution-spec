@@ -1,0 +1,103 @@
+# Golden Test: Street + Locality + Postal Code Strong Match
+# Address components without full normalization produce strong match
+
+test_id: ADDR-STRONG-001-001
+description: Matching street, locality, and postal code produces strong match
+rule_tested: ADDR-STRONG-001
+category: golden
+entity_type: address
+
+input:
+  record_a:
+    source_record_id: "b8c9d0e1-0001-4000-8000-000000000001"
+    address_type: "street"
+    street:
+      house_number: "500"
+      street_name: "Market"
+      street_type: "Street"
+    locality: "San Francisco"
+    postal_code:
+      code: "94102"
+
+  record_b:
+    source_record_id: "b8c9d0e1-0001-4000-8000-000000000002"
+    address_type: "street"
+    street:
+      house_number: "500"
+      street_name: "MARKET"
+      street_type: "ST"
+    locality: "SAN FRANCISCO"
+    postal_code:
+      code: "94102"
+
+expected:
+  resolution: resolved
+  tier: strong
+  rule_fired: ADDR-STRONG-001
+  entity_count: 1
+  conflicts_detected: []
+
+notes: |
+  Street + locality + postal code provides strong confidence.
+  Case and abbreviation differences (Street/ST) normalize before comparison.
+  No unit number on either record; full exact match not applicable.
+
+assertions:
+  - type: tier_equals
+    expected: strong
+  - type: entities_merged
+    expected: true
+---
+test_id: ADDR-STRONG-001-002
+description: Same street and locality with different unit numbers produces conflict
+rule_tested: ADDR-STRONG-001
+category: golden
+entity_type: address
+
+input:
+  record_a:
+    source_record_id: "b8c9d0e1-0001-4000-8000-000000000003"
+    address_type: "street"
+    street:
+      house_number: "100"
+      street_name: "Broadway"
+      street_type: "Ave"
+    unit:
+      unit_type: "Suite"
+      unit_number: "200"
+    locality: "New York"
+    postal_code:
+      code: "10005"
+
+  record_b:
+    source_record_id: "b8c9d0e1-0001-4000-8000-000000000004"
+    address_type: "street"
+    street:
+      house_number: "100"
+      street_name: "Broadway"
+      street_type: "Ave"
+    unit:
+      unit_type: "Suite"
+      unit_number: "300"
+    locality: "New York"
+    postal_code:
+      code: "10005"
+
+expected:
+  resolution: unresolved
+  tier: null
+  rule_fired: null
+  entity_count: 2
+  conflicts_detected: []
+
+notes: |
+  Same building address but different unit numbers.
+  Different units are distinct mailing addresses.
+  Conflict indicator prevents match when units differ.
+
+assertions:
+  - type: tier_equals
+    expected: null
+  - type: entities_merged
+    expected: false
+

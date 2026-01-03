@@ -1,0 +1,443 @@
+# Identifier Normalization Specification
+# Defines standardization rules for high-specificity identifiers
+
+schema_version: "1.0.0"
+description: |
+  Identifier normalization ensures consistent formatting for comparison
+  while preserving original values. Identifiers are high-specificity
+  data points used for exact matching.
+
+# General principles
+principles:
+  - Identifiers require exact match after normalization
+  - Invalid identifiers are flagged, not corrected
+  - Placeholder values are detected and treated as null
+  - Original values always preserved in lineage
+
+# =============================================================================
+# SOCIAL SECURITY NUMBER (SSN)
+# =============================================================================
+
+ssn:
+  identifier_type: ssn
+  description: US Social Security Number
+  applies_to: person.identifiers.ssn
+
+  normalization:
+    rule_id: ID-NORM-SSN
+    description: Normalize SSN to XXX-XX-XXXX format
+    steps:
+      - Remove all non-numeric characters
+      - Validate length is exactly 9 digits
+      - Format as XXX-XX-XXXX
+    examples:
+      - input: "123-45-6789"
+        output: "123-45-6789"
+      - input: "123456789"
+        output: "123-45-6789"
+      - input: "123 45 6789"
+        output: "123-45-6789"
+      - input: "12345678"
+        output: null  # Invalid: wrong length
+        error: "SSN must be 9 digits"
+
+  validation:
+    rule_id: ID-VAL-SSN
+    description: Validate SSN format and detect invalid patterns
+    format_pattern: "^[0-9]{3}-[0-9]{2}-[0-9]{4}$"
+    invalid_patterns:
+      - pattern: "^000-"
+        reason: "Area number 000 is invalid"
+      - pattern: "^666-"
+        reason: "Area number 666 is not issued"
+      - pattern: "^9[0-9]{2}-"
+        reason: "Area numbers 900-999 are not issued (except ITINs)"
+      - pattern: "^[0-9]{3}-00-"
+        reason: "Group number 00 is invalid"
+      - pattern: "^[0-9]{3}-[0-9]{2}-0000$"
+        reason: "Serial number 0000 is invalid"
+    placeholder_patterns:
+      - pattern: "^123-45-6789$"
+        reason: "Common test SSN"
+      - pattern: "^111-11-1111$"
+        reason: "Repeated digits placeholder"
+      - pattern: "^222-22-2222$"
+        reason: "Repeated digits placeholder"
+      - pattern: "^999-99-9999$"
+        reason: "Repeated digits placeholder"
+      - pattern: "^000-00-0000$"
+        reason: "All zeros placeholder"
+    action_on_invalid: flag_and_preserve
+    action_on_placeholder: treat_as_null
+
+  notes: |
+    SSNs may be reused in rare cases (death, identity theft recovery).
+    Conflicting SSNs should trigger human review, not automatic resolution.
+
+# =============================================================================
+# EMPLOYER IDENTIFICATION NUMBER (EIN)
+# =============================================================================
+
+ein:
+  identifier_type: ein
+  description: US Employer Identification Number
+  applies_to: organization.identifiers.ein
+
+  normalization:
+    rule_id: ID-NORM-EIN
+    description: Normalize EIN to XX-XXXXXXX format
+    steps:
+      - Remove all non-numeric characters
+      - Validate length is exactly 9 digits
+      - Format as XX-XXXXXXX
+    examples:
+      - input: "12-3456789"
+        output: "12-3456789"
+      - input: "123456789"
+        output: "12-3456789"
+      - input: "12 345 6789"
+        output: "12-3456789"
+
+  validation:
+    rule_id: ID-VAL-EIN
+    description: Validate EIN format
+    format_pattern: "^[0-9]{2}-[0-9]{7}$"
+    invalid_patterns:
+      - pattern: "^00-"
+        reason: "Prefix 00 is invalid"
+      - pattern: "^07-"
+        reason: "Prefix 07 is reserved"
+      - pattern: "^08-"
+        reason: "Prefix 08 is reserved"
+      - pattern: "^09-"
+        reason: "Prefix 09 is reserved"
+      - pattern: "^17-"
+        reason: "Prefix 17 is reserved"
+      - pattern: "^18-"
+        reason: "Prefix 18 is reserved"
+      - pattern: "^19-"
+        reason: "Prefix 19 is reserved"
+      - pattern: "^28-"
+        reason: "Prefix 28 is reserved"
+      - pattern: "^29-"
+        reason: "Prefix 29 is reserved"
+      - pattern: "^49-"
+        reason: "Prefix 49 is reserved"
+      - pattern: "^69-"
+        reason: "Prefix 69 is reserved"
+      - pattern: "^70-"
+        reason: "Prefix 70 is reserved"
+      - pattern: "^78-"
+        reason: "Prefix 78 is reserved"
+      - pattern: "^79-"
+        reason: "Prefix 79 is reserved"
+      - pattern: "^89-"
+        reason: "Prefix 89 is reserved"
+    placeholder_patterns:
+      - pattern: "^12-3456789$"
+        reason: "Common test EIN"
+      - pattern: "^00-0000000$"
+        reason: "All zeros placeholder"
+      - pattern: "^11-1111111$"
+        reason: "Repeated digits placeholder"
+    action_on_invalid: flag_and_preserve
+    action_on_placeholder: treat_as_null
+
+# =============================================================================
+# LEGAL ENTITY IDENTIFIER (LEI)
+# =============================================================================
+
+lei:
+  identifier_type: lei
+  description: Legal Entity Identifier (ISO 17442)
+  applies_to: organization.identifiers.lei
+
+  normalization:
+    rule_id: ID-NORM-LEI
+    description: Normalize LEI to standard 20-character format
+    steps:
+      - Remove whitespace
+      - Convert to uppercase
+      - Validate length is exactly 20 characters
+    examples:
+      - input: "5493001KJTIIGC8Y1R12"
+        output: "5493001KJTIIGC8Y1R12"
+      - input: "5493001kjtiigc8y1r12"
+        output: "5493001KJTIIGC8Y1R12"
+
+  validation:
+    rule_id: ID-VAL-LEI
+    description: Validate LEI format and checksum
+    format_pattern: "^[A-Z0-9]{20}$"
+    checksum:
+      algorithm: "ISO 7064 Mod 97-10"
+      description: |
+        Characters 19-20 are check digits.
+        Full validation requires mod-97 calculation.
+    placeholder_patterns:
+      - pattern: "^0{20}$"
+        reason: "All zeros"
+      - pattern: "^X{20}$"
+        reason: "All X placeholder"
+    action_on_invalid: flag_and_preserve
+
+  notes: |
+    LEIs are globally unique and administered by GLEIF.
+    Invalid LEIs may indicate data entry error or decommissioned entity.
+
+# =============================================================================
+# PASSPORT NUMBER
+# =============================================================================
+
+passport:
+  identifier_type: passport
+  description: Passport number (varies by country)
+  applies_to: person.identifiers.passport_number
+
+  normalization:
+    rule_id: ID-NORM-PASSPORT
+    description: Normalize passport number
+    steps:
+      - Remove whitespace
+      - Convert to uppercase
+      - Remove punctuation (hyphens, periods)
+    examples:
+      - input: "AB 123456"
+        output: "AB123456"
+      - input: "ab-123-456"
+        output: "AB123456"
+
+  validation:
+    rule_id: ID-VAL-PASSPORT
+    description: Country-specific passport validation
+    country_formats:
+      US:
+        pattern: "^[A-Z0-9]{9}$"
+        description: "9 alphanumeric characters"
+      GB:
+        pattern: "^[0-9]{9}$"
+        description: "9 numeric digits"
+      CA:
+        pattern: "^[A-Z]{2}[0-9]{6}$"
+        description: "2 letters followed by 6 digits"
+      # Add more country formats as needed
+    default_validation:
+      min_length: 5
+      max_length: 20
+      allowed_characters: "A-Z0-9"
+    action_on_invalid: flag_and_preserve
+
+  notes: |
+    Passport number alone is not unique globally.
+    Must be combined with issuing country for matching.
+
+# =============================================================================
+# PHONE NUMBER
+# =============================================================================
+
+phone:
+  identifier_type: phone
+  description: Phone number (E.164 format)
+  applies_to:
+    - person.contact.phones.number
+    - organization.contact.phones.number
+
+  normalization:
+    rule_id: ID-NORM-PHONE
+    description: Normalize phone to E.164 format
+    steps:
+      - Remove all non-numeric characters except leading +
+      - If no country code, assume US (+1) for 10-digit numbers
+      - Format as +[country][number]
+    examples:
+      - input: "(555) 123-4567"
+        output: "+15551234567"  # Assumes US
+      - input: "+44 20 7946 0958"
+        output: "+442079460958"
+      - input: "1-800-555-1234"
+        output: "+18005551234"
+
+  validation:
+    rule_id: ID-VAL-PHONE
+    description: Validate phone number
+    format_pattern: "^\\+[1-9][0-9]{6,14}$"
+    placeholder_patterns:
+      - pattern: "^\\+1555"
+        reason: "555 exchange is reserved for fiction"
+      - pattern: "^\\+10000000000$"
+        reason: "All zeros"
+      - pattern: "^\\+11234567890$"
+        reason: "Sequential digits"
+    action_on_invalid: flag_and_preserve
+    action_on_placeholder: treat_as_null
+
+  notes: |
+    Phone numbers are lower specificity than government IDs.
+    They may be shared (family, business) or reassigned over time.
+
+# =============================================================================
+# EMAIL ADDRESS
+# =============================================================================
+
+email:
+  identifier_type: email
+  description: Email address
+  applies_to:
+    - person.contact.emails.address
+    - organization.contact.emails.address
+
+  normalization:
+    rule_id: ID-NORM-EMAIL
+    description: Normalize email address
+    steps:
+      - Convert to lowercase
+      - Trim whitespace
+      - Remove comments (if present)
+      - Handle Gmail-style dot removal and plus addressing (optional)
+    examples:
+      - input: "John.Smith@Example.COM"
+        output: "john.smith@example.com"
+      - input: "  user@domain.org  "
+        output: "user@domain.org"
+
+  validation:
+    rule_id: ID-VAL-EMAIL
+    description: Validate email format
+    format_pattern: "^[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}$"
+    placeholder_patterns:
+      - pattern: "@example\\.com$"
+        reason: "example.com is reserved"
+      - pattern: "@test\\.com$"
+        reason: "Common test domain"
+      - pattern: "^test@"
+        reason: "Common test address"
+      - pattern: "^noreply@"
+        reason: "No-reply address"
+      - pattern: "^donotreply@"
+        reason: "Do not reply address"
+    action_on_invalid: flag_and_preserve
+    action_on_placeholder: treat_as_null
+
+  gmail_normalization:
+    description: |
+      Gmail ignores dots in local part and supports plus addressing.
+      john.smith@gmail.com = johnsmith@gmail.com = john.smith+tag@gmail.com
+    enabled: false  # Disabled by default; enable for specific use cases
+    notes: |
+      Gmail normalization can help detect duplicate accounts but
+      may produce false positives for non-Gmail addresses.
+
+# =============================================================================
+# D-U-N-S NUMBER
+# =============================================================================
+
+duns:
+  identifier_type: duns
+  description: Dun & Bradstreet D-U-N-S Number
+  applies_to: organization.identifiers.duns
+
+  normalization:
+    rule_id: ID-NORM-DUNS
+    description: Normalize D-U-N-S to 9-digit format
+    steps:
+      - Remove all non-numeric characters
+      - Validate length is exactly 9 digits
+      - Left-pad with zeros if necessary
+    examples:
+      - input: "12-345-6789"
+        output: "123456789"
+      - input: "123456789"
+        output: "123456789"
+      - input: "12345678"
+        output: "012345678"  # Left-pad to 9 digits
+
+  validation:
+    rule_id: ID-VAL-DUNS
+    description: Validate D-U-N-S format
+    format_pattern: "^[0-9]{9}$"
+    placeholder_patterns:
+      - pattern: "^000000000$"
+        reason: "All zeros"
+      - pattern: "^123456789$"
+        reason: "Sequential digits"
+    action_on_invalid: flag_and_preserve
+    action_on_placeholder: treat_as_null
+
+# =============================================================================
+# COMPANY REGISTRATION NUMBER
+# =============================================================================
+
+registration_number:
+  identifier_type: registration_number
+  description: Company registration number (varies by jurisdiction)
+  applies_to: organization.identifiers.registration_number
+
+  normalization:
+    rule_id: ID-NORM-REGNO
+    description: Normalize registration number
+    steps:
+      - Remove whitespace
+      - Convert to uppercase
+      - Preserve hyphens (may be significant)
+    examples:
+      - input: "AB 123456"
+        output: "AB123456"
+      - input: "12-345-678"
+        output: "12-345-678"  # Hyphens preserved
+
+  validation:
+    rule_id: ID-VAL-REGNO
+    description: Jurisdiction-specific validation
+    jurisdiction_formats:
+      US_DE:
+        pattern: "^[0-9]{7}$"
+        description: "Delaware: 7 digits"
+      US_NY:
+        pattern: "^[0-9]{8}$"
+        description: "New York: 8 digits"
+      GB:
+        pattern: "^(SC|NI|[0-9])[0-9]{5,7}$"
+        description: "UK Companies House number"
+      # Add more jurisdictions as needed
+    action_on_invalid: flag_and_preserve
+
+  notes: |
+    Registration numbers are only unique within their jurisdiction.
+    Must always be used in combination with jurisdiction for matching.
+
+# =============================================================================
+# GENERAL PLACEHOLDER DETECTION
+# =============================================================================
+
+placeholder_detection:
+  description: |
+    Common patterns that indicate placeholder or test data
+    rather than real identifiers. These should be treated as null.
+
+  global_patterns:
+    - pattern: "^N/?A$"
+      reason: "Not applicable"
+    - pattern: "^NONE$"
+      reason: "None provided"
+    - pattern: "^NULL$"
+      reason: "Null value"
+    - pattern: "^UNKNOWN$"
+      reason: "Unknown"
+    - pattern: "^-+$"
+      reason: "Dashes only"
+    - pattern: "^X+$"
+      reason: "X placeholder"
+    - pattern: "^0+$"
+      reason: "All zeros"
+    - pattern: "^9+$"
+      reason: "All nines"
+    - pattern: "^TEST"
+      reason: "Test data prefix"
+    - pattern: "^DUMMY"
+      reason: "Dummy data prefix"
+    - pattern: "^SAMPLE"
+      reason: "Sample data prefix"
+
+  action: treat_as_null
+  log_detection: true
+
