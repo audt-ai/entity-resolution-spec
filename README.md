@@ -144,6 +144,6 @@ Contributions should:
 
 ## License
 
-[To be determined]
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for full license text.
 
 contact founders@audt.ai for inquiries. 
