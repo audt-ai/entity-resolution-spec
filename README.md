@@ -2,7 +2,7 @@
 
 a deterministic, minimal schema for resolving identity across people, organizations, and addresses.
 
-designed for evidence-grade analytical work in legal, compliance, audit, and investigative contexts.
+designed for analytical work in legal, compliance, audit, and investigative contexts.
 
 ## Overview
 
