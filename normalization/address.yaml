@@ -4,10 +4,9 @@
 schema_version: "1.0.0"
 description: |
   Address normalization standardizes address components for comparison
-  while preserving original values for lineage. The goal is consistent
-  comparison, not data correction.
+  while preserving original values for lineage.
 
-# General principles
+# principles
 principles:
   - Normalize for comparison, not correction
   - Preserve original values in lineage
@@ -15,7 +14,7 @@ principles:
   - Document all transformation decisions
   - International addresses are best-effort
 
-# Case normalization
+# case normalization
 case_normalization:
   rule_id: ADDR-NORM-CASE
   description: Normalize all text to uppercase
@@ -35,7 +34,7 @@ case_normalization:
     Uppercase is used because it is unambiguous across locales.
     Original case is preserved in raw_address.
 
-# Whitespace normalization
+# whitespace normalization
 whitespace_normalization:
   rule_id: ADDR-NORM-WHITESPACE
   description: Normalize whitespace to single spaces
@@ -50,7 +49,7 @@ whitespace_normalization:
     - input: "New\nYork"
       output: "NEW YORK"
 
-# Punctuation removal
+# punctuation removal
 punctuation_normalization:
   rule_id: ADDR-NORM-PUNCTUATION
   description: Remove punctuation except where meaningful
@@ -71,7 +70,7 @@ punctuation_normalization:
     - input: "Apt. #123"
       output: "APT 123"
 
-# Street type standardization
+# street type standardization
 street_type_normalization:
   rule_id: ADDR-NORM-STREET-TYPE
   description: Standardize street type abbreviations
@@ -122,7 +121,7 @@ street_type_normalization:
     Additional street types should be added based on source data patterns.
     Unknown types are left as-is.
 
-# Directional standardization
+# directional standardization
 directional_normalization:
   rule_id: ADDR-NORM-DIRECTIONAL
   description: Standardize directional abbreviations
@@ -146,7 +145,7 @@ directional_normalization:
     - input: "456 SOUTHEAST ELM AVE"
       output: "456 SE ELM AVE"
 
-# Unit type standardization
+# unit type standardization
 unit_type_normalization:
   rule_id: ADDR-NORM-UNIT-TYPE
   description: Standardize secondary unit type designators
@@ -181,7 +180,7 @@ unit_type_normalization:
     The pound sign (#) is normalized to UNIT for consistency.
     Some systems treat # differently than APT.
 
-# State/Province standardization (US)
+# state/Province standardization (US)
 us_state_normalization:
   rule_id: ADDR-NORM-US-STATE
   description: Standardize US state names to postal abbreviations
@@ -286,7 +285,7 @@ rural_route_normalization:
     - input: "Rural Route 2"
       output: "RR 2"
 
-# Military address normalization
+# military address normalization
 military_normalization:
   rule_id: ADDR-NORM-MILITARY
   description: Standardize military address designations
@@ -306,7 +305,7 @@ military_normalization:
     - input: "PSC 123 BOX 456, APO AE 09001"
       output: "PSC 123 BOX 456 APO AE 09001"
 
-# Postal code normalization
+# postal code normalization
 postal_code_normalization:
   rule_id: ADDR-NORM-POSTAL
   description: Normalize postal codes by country
@@ -337,7 +336,7 @@ postal_code_normalization:
     International postal code formats vary widely.
     Unknown formats are stored as-is after whitespace normalization.
 
-# Known failure modes
+# known failure modes
 failure_modes:
   - mode: International addresses
     description: |
@@ -373,7 +372,7 @@ failure_modes:
     mitigation: |
       Store original and corrected separately; document correction source.
 
-# Validation rules
+# validation rules
 validation:
   - rule: postal_code_format_us
     description: US ZIP codes must be 5 or 9 digits
