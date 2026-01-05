@@ -1,8 +1,4 @@
-# Entity Resolution Spec - Design Document
-
-## 1. Scope and Non-Goals
-
-### What This Schema Does
+## this schema is meant for:
 
 - Resolves identity across three entity types: people, organizations, and addresses
 - Provides deterministic matching rules that produce identical outputs for identical inputs
@@ -10,15 +6,9 @@
 - Maintains complete lineage from resolved entities back to source records
 - Supports human review workflows for contested or ambiguous resolutions
 
-### What This Schema Does Not Do
 
-- Score, rank, or infer risk, intent, or behavior
-- Perform probabilistic matching or fuzzy inference
-- Automatically escalate confidence tiers based on accumulation of weak signals
-- Make decisions—it produces evidence for humans or downstream systems to act on
-- Deduplicate aggressively; it prefers under-merging to over-merging
 
-### Explicit Boundaries
+### explicit Boundaries
 
 - No machine learning components
 - No probabilistic inference engines
