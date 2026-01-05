@@ -3,7 +3,7 @@
 
 schema_version: "1.0.0"
 description: |
-  Resolution rules are deterministic conditions that, when satisfied, indicate
+  Resolution rules are deterministic conditions that indicate
   that two records refer to the same entity. Rules are organized by tier
   (exact, strong, weak) and evaluated in precedence order.
 
